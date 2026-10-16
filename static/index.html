@@ -3,159 +3,225 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PulseCare+ | Smart Hospital & Clinical Management</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>PulseCare+ | Hospital & Clinical Management Portal</title>
+  <meta name="description" content="PulseCare+ patient and staff portal for appointments, prescriptions, ward beds and pharmacy orders." />
+  <!-- Fonts and icons are self-hosted (see /vendor/licenses) so no visitor data goes to third-party CDNs. -->
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/fontawesome.min.css" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/solid.min.css" />
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
+  <a href="#" class="skip-link" onclick="skipToMain(event)">Skip to main content</a>
+
+  <div id="demo-banner" class="demo-banner hidden" role="note">
+    Demo environment: all names and records shown are fictional sample data. Do not enter real patient information.
+  </div>
+
   <!-- AUTHENTICATION VIEW -->
-  <div id="auth-screen" class="auth-wrapper">
-    <div class="auth-brand-glow"></div>
+  <main id="auth-screen" class="auth-wrapper" tabindex="-1">
+    <div class="auth-brand-glow" aria-hidden="true"></div>
     <div class="auth-card glass-panel">
       <div class="auth-header">
-        <div class="logo-circle"><i class="fa-solid fa-heart-pulse"></i></div>
-        <h2>PulseCare<span class="gradient-text">+</span></h2>
-        <p class="auth-tagline">Advanced Healthcare & Clinical Management Portal</p>
+        <div class="logo-circle" aria-hidden="true"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></div>
+        <h1 class="auth-title">PulseCare<span class="gradient-text">+</span></h1>
+        <p class="auth-tagline">Hospital & Clinical Management Portal</p>
       </div>
 
       <!-- Tab Switcher (Login / Signup) -->
-      <div class="auth-tabs">
-        <button id="tab-login" class="tab-btn active" onclick="switchAuthTab('login')">
-          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+      <div class="auth-tabs" role="tablist" aria-label="Sign in or create an account">
+        <button type="button" id="tab-login" class="tab-btn active" role="tab" aria-selected="true" aria-controls="login-form" onclick="switchAuthTab('login')" onkeydown="handleAuthTabKeys(event)">
+          <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Sign In
         </button>
-        <button id="tab-signup" class="tab-btn" onclick="switchAuthTab('signup')">
-          <i class="fa-solid fa-user-plus"></i> Create Account
+        <button type="button" id="tab-signup" class="tab-btn" role="tab" aria-selected="false" aria-controls="signup-form" tabindex="-1" onclick="switchAuthTab('signup')" onkeydown="handleAuthTabKeys(event)">
+          <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Create Account
         </button>
       </div>
 
       <!-- Login Form -->
-      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+      <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="tab-login" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label><i class="fa-solid fa-user"></i> Username</label>
+          <label for="login-username"><i class="fa-solid fa-user" aria-hidden="true"></i> Username</label>
           <input type="text" id="login-username" placeholder="e.g. admin or patient_john" required autocomplete="username" />
         </div>
         <div class="form-group">
-          <label><i class="fa-solid fa-lock"></i> Password</label>
+          <label for="login-password"><i class="fa-solid fa-lock" aria-hidden="true"></i> Password</label>
           <div class="password-input-wrapper">
             <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
-            <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('login-password', 'login-eye-icon')" title="Toggle password visibility">
-              <i class="fa-solid fa-eye" id="login-eye-icon"></i>
+            <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('login-password', 'login-eye-icon', this)" aria-label="Show password" aria-pressed="false">
+              <i class="fa-solid fa-eye" aria-hidden="true" id="login-eye-icon"></i>
             </button>
           </div>
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-          <span>Log In to Portal</span> <i class="fa-solid fa-arrow-right"></i>
+          <span>Log In to Portal</span> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
         </button>
-        <div class="quick-demo-accounts">
-          <p>Quick Demo Logins:</p>
+        <div class="quick-demo-accounts demo-only hidden">
+          <p>Demo logins (fictional sample accounts):</p>
           <div class="demo-chips">
-            <button type="button" onclick="fillDemo('admin', 'admin123')"><i class="fa-solid fa-user-doctor"></i> Staff (Admin)</button>
-            <button type="button" onclick="fillDemo('patient_john', 'patient123')"><i class="fa-solid fa-hospital-user"></i> Patient</button>
+            <button type="button" onclick="fillDemo('admin', 'admin123')"><i class="fa-solid fa-user-doctor" aria-hidden="true"></i> Staff (Admin)</button>
+            <button type="button" onclick="fillDemo('patient_john', 'patient123')"><i class="fa-solid fa-hospital-user" aria-hidden="true"></i> Patient</button>
           </div>
         </div>
       </form>
 
       <!-- Signup Form -->
-      <form id="signup-form" class="auth-form hidden" onsubmit="handleSignup(event)">
-        <div class="role-selector-box">
-          <label class="role-header-label">I am registering as:</label>
+      <form id="signup-form" class="auth-form hidden" role="tabpanel" aria-labelledby="tab-signup" onsubmit="handleSignup(event)">
+        <fieldset class="role-selector-box">
+          <legend class="role-header-label">I am registering as:</legend>
           <div class="role-radios">
             <label class="role-card">
-              <input type="radio" name="signup-role" value="patient" checked />
+              <input type="radio" name="signup-role" value="patient" checked onchange="updateSignupRole()" />
               <div class="role-card-inner">
-                <i class="fa-solid fa-hospital-user"></i>
+                <i class="fa-solid fa-hospital-user" aria-hidden="true"></i>
                 <div class="role-name">Patient</div>
                 <small>Book visits, beds & Rx</small>
               </div>
             </label>
             <label class="role-card">
-              <input type="radio" name="signup-role" value="staff" />
+              <input type="radio" name="signup-role" value="staff" onchange="updateSignupRole()" />
               <div class="role-card-inner">
-                <i class="fa-solid fa-user-doctor"></i>
+                <i class="fa-solid fa-user-doctor" aria-hidden="true"></i>
                 <div class="role-name">Hospital Staff</div>
-                <small>Admin & Doctor Access</small>
+                <small>Invite code required</small>
               </div>
             </label>
           </div>
+        </fieldset>
+
+        <div class="form-group hidden" id="staff-invite-group">
+          <label for="signup-invite-code"><i class="fa-solid fa-key" aria-hidden="true"></i> Staff Invite Code</label>
+          <input type="text" id="signup-invite-code" autocomplete="off" />
         </div>
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label><i class="fa-solid fa-id-card"></i> Full Name</label>
-            <input type="text" id="signup-name" placeholder="Dr. Jane Doe / John Doe" required />
+            <label for="signup-name"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Full Name</label>
+            <input type="text" id="signup-name" placeholder="Dr. Jane Doe / John Doe" required autocomplete="name" />
           </div>
           <div class="form-group">
-            <label><i class="fa-solid fa-phone"></i> Mobile Number</label>
-            <input type="tel" id="signup-mobile" placeholder="9876543210" required />
+            <label for="signup-mobile"><i class="fa-solid fa-phone" aria-hidden="true"></i> Mobile Number</label>
+            <input type="tel" id="signup-mobile" placeholder="9876543210" required autocomplete="tel" />
           </div>
         </div>
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label><i class="fa-solid fa-user"></i> Pick Username</label>
-            <input type="text" id="signup-username" placeholder="janedoe" required />
+            <label for="signup-username"><i class="fa-solid fa-user" aria-hidden="true"></i> Pick Username</label>
+            <input type="text" id="signup-username" placeholder="janedoe" required autocomplete="username" />
           </div>
           <div class="form-group">
-            <label><i class="fa-solid fa-lock"></i> Password</label>
+            <label for="signup-password"><i class="fa-solid fa-lock" aria-hidden="true"></i> Password</label>
             <div class="password-input-wrapper">
-              <input type="password" id="signup-password" placeholder="At least 6 chars" required minlength="6" />
-              <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('signup-password', 'signup-eye-icon')" title="Toggle password visibility">
-                <i class="fa-solid fa-eye" id="signup-eye-icon"></i>
+              <input type="password" id="signup-password" placeholder="At least 6 chars" required minlength="6" autocomplete="new-password" />
+              <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('signup-password', 'signup-eye-icon', this)" aria-label="Show password" aria-pressed="false">
+                <i class="fa-solid fa-eye" aria-hidden="true" id="signup-eye-icon"></i>
               </button>
             </div>
           </div>
         </div>
 
+        <fieldset class="consent-fieldset">
+          <legend>Age of the person this account is for</legend>
+          <div class="consent-group">
+            <label class="consent-item">
+              <input type="radio" name="signup-age-group" value="adult" required onchange="updateSignupAgeGroup()" />
+              <span>18 years or older</span>
+            </label>
+            <label class="consent-item">
+              <input type="radio" name="signup-age-group" value="minor" onchange="updateSignupAgeGroup()" />
+              <span>Under 18 &mdash; a parent or legal guardian is creating this account and consents on the child's behalf</span>
+            </label>
+          </div>
+          <div id="guardian-fields" class="hidden">
+            <div class="form-group">
+              <label for="signup-guardian-name"><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Parent / Guardian Full Name</label>
+              <input type="text" id="signup-guardian-name" autocomplete="off" />
+            </div>
+            <label class="consent-item">
+              <input type="checkbox" id="signup-guardian-consent" />
+              <span>I am the parent or legal guardian of this child and I consent to PulseCare+ processing the child's personal and health information as described in the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="consent-group">
+          <label class="consent-item">
+            <input type="checkbox" id="signup-accept-terms" required />
+            <span>I have read and agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>. <em>(required)</em></span>
+          </label>
+          <label class="consent-item" id="health-consent-row">
+            <input type="checkbox" id="signup-health-consent" />
+            <span>I explicitly consent to PulseCare+ processing my health information (symptoms, allergies, medical history, prescriptions) to provide care. I can withdraw consent by requesting account deletion. <em>(required for patients)</em></span>
+          </label>
+          <label class="consent-item">
+            <input type="checkbox" id="signup-marketing" />
+            <span>Send me occasional health tips and hospital updates. You can unsubscribe at any time. <em>(optional)</em></span>
+          </label>
+        </div>
+
         <button type="submit" class="btn btn-gradient btn-block">
-          <i class="fa-solid fa-circle-check"></i> Create Account Now
+          <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Create Account
         </button>
       </form>
     </div>
-  </div>
+
+    <footer class="site-footer auth-footer" aria-label="Legal and business information">
+      <nav aria-label="Legal">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="/refunds">Refund Policy</a>
+        <a href="/cookies">Cookie Policy</a>
+        <a href="/accessibility">Accessibility</a>
+        <button type="button" class="link-button" onclick="openCookieSettings()">Cookie settings</button>
+      </nav>
+      <div class="business-details"></div>
+    </footer>
+  </main>
 
   <!-- MAIN APP PORTAL (Protected) -->
   <div id="app-screen" class="app-layout hidden">
     <!-- Sidebar -->
     <aside class="sidebar glass-panel">
       <div class="sidebar-brand">
-        <div class="logo-circle"><i class="fa-solid fa-heart-pulse"></i></div>
+        <div class="logo-circle" aria-hidden="true"><i class="fa-solid fa-heart-pulse" aria-hidden="true"></i></div>
         <div class="brand-info">
           <h3>PulseCare<span>+</span></h3>
           <span id="user-role-badge" class="badge-role">Staff</span>
         </div>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" aria-label="Main">
         <button class="nav-item active" onclick="switchView('dashboard')">
-          <i class="fa-solid fa-chart-pie"></i> <span>Dashboard</span>
+          <i class="fa-solid fa-chart-pie" aria-hidden="true"></i> <span>Dashboard</span>
         </button>
         <button class="nav-item" onclick="switchView('beds')">
-          <i class="fa-solid fa-bed-pulse"></i> <span>Ward Bed Map</span>
+          <i class="fa-solid fa-bed-pulse" aria-hidden="true"></i> <span>Ward Bed Map</span>
         </button>
         <button class="nav-item staff-only" onclick="switchView('employees')">
-          <i class="fa-solid fa-user-doctor"></i> <span>Doctors & Staff</span>
+          <i class="fa-solid fa-user-doctor" aria-hidden="true"></i> <span>Doctors & Staff</span>
         </button>
         <button class="nav-item staff-only" onclick="switchView('patients')">
-          <i class="fa-solid fa-hospital-user"></i> <span>All Patients (20)</span>
+          <i class="fa-solid fa-hospital-user" aria-hidden="true"></i> <span>All Patients</span>
         </button>
         <!-- Dedicated Patient Medical Record View (Visible to Patient) -->
         <button class="nav-item patient-only" onclick="switchView('profile')">
-          <i class="fa-solid fa-id-card-clip"></i> <span>My Medical Profile</span>
+          <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i> <span>My Medical Profile</span>
         </button>
         <button class="nav-item" onclick="switchView('consultations')">
-          <i class="fa-solid fa-calendar-check"></i> <span>Consultations</span>
+          <i class="fa-solid fa-calendar-check" aria-hidden="true"></i> <span>Consultations</span>
         </button>
         <button class="nav-item" onclick="switchView('prescriptions')">
-          <i class="fa-solid fa-file-prescription"></i> <span>Prescriptions</span>
+          <i class="fa-solid fa-file-prescription" aria-hidden="true"></i> <span>Prescriptions</span>
         </button>
         <button class="nav-item" onclick="switchView('pharmacy')">
-          <i class="fa-solid fa-pills"></i> <span>Pharmacy Stock</span>
+          <i class="fa-solid fa-pills" aria-hidden="true"></i> <span>Pharmacy Stock</span>
         </button>
         <button class="nav-item" onclick="switchView('emt')">
-          <i class="fa-solid fa-truck-medical"></i> <span>Ambulance Fleet</span>
+          <i class="fa-solid fa-truck-medical" aria-hidden="true"></i> <span>Ambulance Fleet</span>
+        </button>
+        <button class="nav-item staff-only" onclick="switchView('privacy')">
+          <i class="fa-solid fa-user-lock" aria-hidden="true"></i> <span>Privacy Requests</span>
         </button>
       </nav>
 
@@ -165,14 +231,14 @@
           <span class="user-name" id="display-user-name">Administrator</span>
           <span class="user-handle" id="display-user-handle">@admin</span>
         </div>
-        <button class="btn-logout" title="Sign Out" onclick="handleLogout()">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        <button class="btn-logout" title="Sign Out" aria-label="Sign out" onclick="handleLogout()">
+          <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
         </button>
       </div>
     </aside>
 
     <!-- Main Content Area -->
-    <main class="main-content">
+    <main class="main-content" id="main-content" tabindex="-1">
       <!-- Top Navbar -->
       <header class="top-nav glass-panel">
         <div class="page-title-wrap">
@@ -180,13 +246,13 @@
           <p id="page-subtitle">Real-time clinical metrics & status</p>
         </div>
         <div class="top-actions">
-          <button class="btn btn-outline staff-only" onclick="resetDatabasePrompt()">
-            <i class="fa-solid fa-rotate-left"></i> Reset Demo Data
+          <button class="btn btn-outline staff-only demo-only hidden" onclick="resetDatabasePrompt()">
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset Demo Data
           </button>
           <!-- Top-Right Action Button: ONLY visible on Dashboard and Consultations -->
           <div id="top-quick-action-container">
             <button class="btn btn-primary" onclick="openNewActionModal()">
-              <i class="fa-solid fa-plus"></i> <span id="quick-action-text">Book Appointment</span>
+              <i class="fa-solid fa-plus" aria-hidden="true"></i> <span id="quick-action-text">Book Appointment</span>
             </button>
           </div>
         </div>
@@ -199,45 +265,45 @@
           <!-- Metric Cards -->
           <div class="metrics-grid">
             <div class="stat-card card-gradient-emerald">
-              <div class="stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+              <div class="stat-icon"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i></div>
               <div class="stat-content">
                 <p id="stat-consultations-title">Appointments</p>
                 <h3 id="stat-consultations">0</h3>
-                <span class="stat-meta" id="stat-consultations-meta"><i class="fa-solid fa-clock"></i> Scheduled status</span>
+                <span class="stat-meta" id="stat-consultations-meta"><i class="fa-solid fa-clock" aria-hidden="true"></i> Scheduled status</span>
               </div>
             </div>
             <div class="stat-card card-gradient-cyan">
-              <div class="stat-icon"><i class="fa-solid fa-bed-pulse"></i></div>
+              <div class="stat-icon"><i class="fa-solid fa-bed-pulse" aria-hidden="true"></i></div>
               <div class="stat-content">
                 <p>Available Beds</p>
                 <h3 id="stat-available-beds">0</h3>
-                <span class="stat-meta"><i class="fa-solid fa-hospital"></i> 70 Total beds</span>
+                <span class="stat-meta"><i class="fa-solid fa-hospital" aria-hidden="true"></i> <span id="stat-total-beds">0</span> total beds</span>
               </div>
             </div>
             <!-- Total Registered Patients: ONLY visible to Doctors and Staff -->
             <div class="stat-card card-gradient-rose staff-only">
-              <div class="stat-icon"><i class="fa-solid fa-hospital-user"></i></div>
+              <div class="stat-icon"><i class="fa-solid fa-hospital-user" aria-hidden="true"></i></div>
               <div class="stat-content">
                 <p>Total Registered Patients</p>
                 <h3 id="stat-patients">0</h3>
-                <span class="stat-meta"><i class="fa-solid fa-shield-halved"></i> 20 Database Records</span>
+                <span class="stat-meta"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Patient records</span>
               </div>
             </div>
             <!-- Medical Staff: ONLY visible to Staff -->
             <div class="stat-card card-gradient-purple staff-only">
-              <div class="stat-icon"><i class="fa-solid fa-user-doctor"></i></div>
+              <div class="stat-icon"><i class="fa-solid fa-user-doctor" aria-hidden="true"></i></div>
               <div class="stat-content">
                 <p>Medical Specialists</p>
                 <h3 id="stat-employees">0</h3>
-                <span class="stat-meta"><i class="fa-solid fa-user-check"></i> 10 Doctors</span>
+                <span class="stat-meta"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Doctors on record</span>
               </div>
             </div>
             <div class="stat-card card-gradient-amber">
-              <div class="stat-icon"><i class="fa-solid fa-truck-medical"></i></div>
+              <div class="stat-icon"><i class="fa-solid fa-truck-medical" aria-hidden="true"></i></div>
               <div class="stat-content">
                 <p>Ambulances Ready</p>
                 <h3 id="stat-ambulances">0</h3>
-                <span class="stat-meta"><i class="fa-solid fa-bolt"></i> 24/7 Emergency EMT</span>
+                <span class="stat-meta"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Currently available</span>
               </div>
             </div>
           </div>
@@ -246,7 +312,7 @@
           <div class="dashboard-grid-2">
             <div class="card glass-panel">
               <div class="card-head">
-                <h3><i class="fa-solid fa-stethoscope"></i> Recent Consultations</h3>
+                <h3><i class="fa-solid fa-stethoscope" aria-hidden="true"></i> Recent Consultations</h3>
                 <button class="btn btn-sm btn-outline" onclick="switchView('consultations')">View All</button>
               </div>
               <div class="table-responsive">
@@ -266,7 +332,7 @@
 
             <div class="card glass-panel">
               <div class="card-head">
-                <h3><i class="fa-solid fa-truck-fast"></i> Emergency Fleet Status</h3>
+                <h3><i class="fa-solid fa-truck-fast" aria-hidden="true"></i> Emergency Fleet Status</h3>
                 <button class="btn btn-sm btn-outline" onclick="switchView('emt')">Fleet Board</button>
               </div>
               <div class="table-responsive">
@@ -290,12 +356,12 @@
         <section id="view-beds" class="view-panel">
           <div class="table-card glass-panel">
             <div class="ward-legend">
-              <span style="font-weight: 700; color: #38bdf8;"><i class="fa-solid fa-map"></i> Bed Status Legend:</span>
-              <div class="legend-item"><div class="legend-box available"></div> Available (Click to Reserve / Allocate)</div>
-              <div class="legend-item"><div class="legend-box occupied"></div> Occupied (Hover to view Patient)</div>
-              <div class="legend-item"><div class="legend-box maintenance"></div> Sanitization / Maintenance</div>
+              <span style="font-weight: 700; color: #38bdf8;"><i class="fa-solid fa-map" aria-hidden="true"></i> Bed Status Legend:</span>
+              <div class="legend-item"><div class="legend-box available" aria-hidden="true"></div> Available (select to reserve / allocate)</div>
+              <div class="legend-item"><div class="legend-box occupied" aria-hidden="true"></div> Occupied</div>
+              <div class="legend-item"><div class="legend-box maintenance" aria-hidden="true"></div> Maintenance</div>
               <button class="btn btn-sm btn-primary staff-only" style="margin-left: auto;" onclick="openModal('modal-assign-bed')">
-                <i class="fa-solid fa-user-plus"></i> Staff: Allocate Bed
+                <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Staff: Allocate Bed
               </button>
             </div>
 
@@ -309,11 +375,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search doctor by name or department..." oninput="filterTable('employees-table', this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search doctor by name or department" placeholder="Search doctor by name or department..." oninput="filterTable('employees-table', this.value)" />
               </div>
               <button class="btn btn-primary" onclick="openModal('modal-add-employee')">
-                <i class="fa-solid fa-user-plus"></i> Add Doctor / Staff
+                <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Add Doctor / Staff
               </button>
             </div>
             <div class="table-responsive">
@@ -340,11 +406,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search patient name, issue, PID..." oninput="filterTable('patients-table', this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search patient name, issue, PID" placeholder="Search patient name, issue, PID..." oninput="filterTable('patients-table', this.value)" />
               </div>
               <button class="btn btn-primary staff-only" onclick="openModal('modal-add-patient')">
-                <i class="fa-solid fa-plus"></i> Register Patient
+                <i class="fa-solid fa-plus" aria-hidden="true"></i> Register Patient
               </button>
             </div>
             <div class="table-responsive">
@@ -374,28 +440,28 @@
             <!-- Personal & Clinical Health Record Editor -->
             <div class="card glass-panel">
               <div class="card-head">
-                <h3><i class="fa-solid fa-notes-medical"></i> My Health Profile & Clinical Record</h3>
+                <h3><i class="fa-solid fa-notes-medical" aria-hidden="true"></i> My Health Profile & Clinical Record</h3>
                 <span id="profile-pid-badge" class="badge-role">PAT001</span>
               </div>
               <form id="profile-form" onsubmit="handleUpdateProfile(event)">
                 <div class="form-grid-2">
                   <div class="form-group">
-                    <label><i class="fa-solid fa-user"></i> Full Legal Name</label>
+                    <label for="prof-name"><i class="fa-solid fa-user" aria-hidden="true"></i> Full Legal Name</label>
                     <input type="text" id="prof-name" required />
                   </div>
                   <div class="form-group">
-                    <label><i class="fa-solid fa-phone"></i> Emergency Contact Mobile</label>
+                    <label for="prof-mobile"><i class="fa-solid fa-phone" aria-hidden="true"></i> Emergency Contact Mobile</label>
                     <input type="tel" id="prof-mobile" required />
                   </div>
                 </div>
 
                 <div class="form-grid-3">
                   <div class="form-group">
-                    <label>Age</label>
+                    <label for="prof-age">Age</label>
                     <input type="number" id="prof-age" required />
                   </div>
                   <div class="form-group">
-                    <label>Gender</label>
+                    <label for="prof-gender">Gender</label>
                     <select id="prof-gender">
                       <option>Male</option>
                       <option>Female</option>
@@ -403,7 +469,7 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label>Blood Group</label>
+                    <label for="prof-blood">Blood Group</label>
                     <select id="prof-blood">
                       <option>Unknown</option>
                       <option>A+</option>
@@ -419,23 +485,23 @@
                 </div>
 
                 <div class="form-group">
-                  <label><i class="fa-solid fa-triangle-exclamation"></i> Known Drug / Environmental Allergies</label>
+                  <label for="prof-allergies"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Known Drug / Environmental Allergies</label>
                   <input type="text" id="prof-allergies" placeholder="e.g. Penicillin, Sulfa drugs, Peanuts" />
                 </div>
 
                 <div class="form-group">
-                  <label><i class="fa-solid fa-stethoscope"></i> Current Chief Medical Concern / Symptoms</label>
+                  <label for="prof-issue"><i class="fa-solid fa-stethoscope" aria-hidden="true"></i> Current Chief Medical Concern / Symptoms</label>
                   <input type="text" id="prof-issue" placeholder="e.g. Chest tightness, persistent fever" required />
                 </div>
 
                 <div class="form-group">
-                  <label><i class="fa-solid fa-file-medical"></i> Past Medical & Surgical History</label>
+                  <label for="prof-history"><i class="fa-solid fa-file-medical" aria-hidden="true"></i> Past Medical & Surgical History</label>
                   <textarea id="prof-history" rows="2" placeholder="e.g. Hypertension 5 yrs, Knee surgery 2024"></textarea>
                 </div>
 
                 <div class="profile-meta-info" style="margin-bottom: 16px;">
                   <span id="prof-bed-info" class="badge-role" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 12px; padding: 6px 12px;">
-                    <i class="fa-solid fa-bed"></i> Bed: Not currently admitted
+                    <i class="fa-solid fa-bed" aria-hidden="true"></i> Bed: Not currently admitted
                   </span>
                   <span id="prof-bill-info" class="badge-role" style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">
                     Bill No: N/A
@@ -443,7 +509,7 @@
                 </div>
 
                 <button type="submit" class="btn btn-gradient btn-block">
-                  <i class="fa-solid fa-floppy-disk"></i> Save & Update Health Record
+                  <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save & Update Health Record
                 </button>
               </form>
             </div>
@@ -451,7 +517,7 @@
             <!-- Medicine Purchase History Table embedded inside Profile -->
             <div class="card glass-panel">
               <div class="card-head">
-                <h3><i class="fa-solid fa-receipt"></i> Medicine Purchase History</h3>
+                <h3><i class="fa-solid fa-receipt" aria-hidden="true"></i> Medicine Purchase History</h3>
                 <span class="badge-role" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8;">Receipt Log</span>
               </div>
               <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
@@ -471,6 +537,25 @@
                 </table>
               </div>
             </div>
+
+            <!-- Privacy controls: export, communication preferences, deletion -->
+            <div class="card glass-panel privacy-card">
+              <div class="card-head">
+                <h3><i class="fa-solid fa-user-lock" aria-hidden="true"></i> Privacy & My Data</h3>
+              </div>
+              <p>Download a copy of everything we store about you, change your communication preferences, or ask us to delete your account. See our <a class="link-inline" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+              <div class="consent-group" style="margin-top: 12px;">
+                <label class="consent-item">
+                  <input type="checkbox" id="pref-marketing" onchange="handleMarketingPreference(this.checked)" />
+                  <span>Receive optional health tips and hospital updates</span>
+                </label>
+              </div>
+              <div class="privacy-actions">
+                <a class="btn btn-outline" href="/api/privacy/export" download><i class="fa-solid fa-download" aria-hidden="true"></i> Download my data (JSON)</a>
+                <button type="button" class="btn btn-danger-sm" onclick="openModal('modal-delete-account')"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Request account deletion</button>
+              </div>
+              <div id="my-privacy-requests" style="margin-top: 12px;" aria-live="polite"></div>
+            </div>
           </div>
         </section>
 
@@ -479,11 +564,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search consultation..." oninput="filterTable('consultations-table', this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search consultation" placeholder="Search consultation..." oninput="filterTable('consultations-table', this.value)" />
               </div>
               <button class="btn btn-primary" onclick="openModal('modal-add-consultation')">
-                <i class="fa-solid fa-calendar-plus"></i> Book Consultation
+                <i class="fa-solid fa-calendar-plus" aria-hidden="true"></i> Book Consultation
               </button>
             </div>
             <div class="table-responsive">
@@ -511,11 +596,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search diagnosis or patient..." oninput="filterPrescriptions(this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search diagnosis or patient" placeholder="Search diagnosis or patient..." oninput="filterPrescriptions(this.value)" />
               </div>
               <button class="btn btn-primary staff-only" onclick="openModal('modal-add-prescription')">
-                <i class="fa-solid fa-file-medical"></i> Generate Prescription
+                <i class="fa-solid fa-file-medical" aria-hidden="true"></i> Generate Prescription
               </button>
             </div>
             <div class="prescriptions-list-grid" id="prescriptions-container"></div>
@@ -527,11 +612,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search medicine..." oninput="filterTable('pharmacy-table', this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search medicine" placeholder="Search medicine..." oninput="filterTable('pharmacy-table', this.value)" />
               </div>
               <button class="btn btn-primary staff-only" onclick="openModal('modal-add-medicine')">
-                <i class="fa-solid fa-plus"></i> Restock Medicine
+                <i class="fa-solid fa-plus" aria-hidden="true"></i> Restock Medicine
               </button>
             </div>
             <div class="table-responsive">
@@ -552,7 +637,7 @@
             <!-- Master Hospital Purchase Logs (Staff Only) -->
             <div class="staff-only" style="margin-top: 32px;">
               <div class="card-head">
-                <h3><i class="fa-solid fa-file-invoice-dollar"></i> Hospital-Wide Medicine Purchase Log</h3>
+                <h3><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i> Hospital-Wide Medicine Purchase Log</h3>
               </div>
               <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
                 <table class="modern-table">
@@ -580,11 +665,11 @@
           <div class="table-card glass-panel">
             <div class="table-header-bar">
               <div class="search-input-wrap">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" placeholder="Search ambulance vehicle..." oninput="filterTable('emt-table', this.value)" />
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" aria-label="Search ambulance vehicle" placeholder="Search ambulance vehicle..." oninput="filterTable('emt-table', this.value)" />
               </div>
               <button class="btn btn-primary staff-only" onclick="openModal('modal-add-emt')">
-                <i class="fa-solid fa-truck-medical"></i> Add Ambulance
+                <i class="fa-solid fa-truck-medical" aria-hidden="true"></i> Add Ambulance
               </button>
             </div>
             <div class="table-responsive">
@@ -604,7 +689,42 @@
             </div>
           </div>
         </section>
+
+        <!-- 10. PRIVACY / DATA DELETION REQUESTS (Staff Only) -->
+        <section id="view-privacy" class="view-panel">
+          <div class="table-card glass-panel">
+            <p class="text-muted" style="margin-bottom: 12px;">Deletion requests must be resolved within 30 days. Completing a request erases the login and non-clinical personal data; consultation and prescription records are retained, unlinked from the account, for the legal medical-record retention period.</p>
+            <div class="table-responsive">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Account</th>
+                    <th>Requested</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Outcome</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="privacy-requests-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       </div>
+
+      <footer class="site-footer" aria-label="Legal and business information">
+        <nav aria-label="Legal">
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="/refunds">Refund Policy</a>
+          <a href="/cookies">Cookie Policy</a>
+          <a href="/accessibility">Accessibility</a>
+          <button type="button" class="link-button" onclick="openCookieSettings()">Cookie settings</button>
+        </nav>
+        <div class="business-details"></div>
+      </footer>
     </main>
   </div>
 
@@ -612,32 +732,33 @@
 
   <!-- Modal: Patient Buy Medicine -->
   <div id="modal-buy-medicine" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-buy-medicine-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-cart-shopping"></i> Purchase Medicine</h3>
-        <button class="btn-close" onclick="closeModal('modal-buy-medicine')">&times;</button>
+        <h3 id="modal-buy-medicine-title"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Purchase Medicine</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-buy-medicine')">&times;</button>
       </div>
       <form onsubmit="handleBuyMedicine(event)">
         <div class="form-group">
-          <label>Selected Medicine</label>
+          <label for="buy-med-name">Selected Medicine</label>
           <input type="text" id="buy-med-name" readonly style="background: rgba(0,0,0,0.4); font-weight: 700; color: #38bdf8;" />
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label>Price per Unit (INR)</label>
+            <label for="buy-med-price">Price per Unit (INR)</label>
             <input type="text" id="buy-med-price" readonly style="background: rgba(0,0,0,0.4);" />
           </div>
           <div class="form-group">
-            <label>Units / Quantity Required</label>
+            <label for="buy-med-qty">Units / Quantity Required</label>
             <input type="number" id="buy-med-qty" value="1" min="1" max="100" required oninput="calculatePurchaseTotal()" />
           </div>
         </div>
-        <div style="background: rgba(14, 165, 233, 0.15); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid rgba(14,165,233,0.3);">
-          <span style="font-size: 13px; color: #e2e8f0;">Total Payable Amount:</span>
-          <h3 id="buy-med-total" style="color: #34d399; font-size: 22px; margin-top: 4px;">₹0.00</h3>
+        <div class="fee-summary" aria-live="polite">
+          <span>Total payable:</span>
+          <p id="buy-med-total" style="color: #34d399; font-size: 22px; font-weight: 800; margin-top: 4px;">₹0.00</p>
+          <small>This is the full price. No taxes, delivery or service charges are added at checkout. See our <a class="link-inline" href="/refunds" target="_blank" rel="noopener">Refund Policy</a>.</small>
         </div>
         <button type="submit" class="btn btn-gradient btn-block">
-          <i class="fa-solid fa-bag-shopping"></i> Confirm & Purchase
+          <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i> Pay & Confirm Purchase
         </button>
       </form>
     </div>
@@ -645,18 +766,18 @@
 
   <!-- Modal: Staff Allocate Bed -->
   <div id="modal-assign-bed" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-assign-bed-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-bed-pulse"></i> Staff: Allocate Hospital Bed</h3>
-        <button class="btn-close" onclick="closeModal('modal-assign-bed')">&times;</button>
+        <h3 id="modal-assign-bed-title"><i class="fa-solid fa-bed-pulse" aria-hidden="true"></i> Staff: Allocate Hospital Bed</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-assign-bed')">&times;</button>
       </div>
       <form onsubmit="handleAssignBed(event)">
         <div class="form-group">
-          <label>Select Target Bed</label>
+          <label for="bed-select-id">Select Target Bed</label>
           <select id="bed-select-id" required></select>
         </div>
         <div class="form-group">
-          <label>Select Patient</label>
+          <label for="bed-patient-id">Select Patient</label>
           <select id="bed-patient-id" required></select>
         </div>
         <button type="submit" class="btn btn-primary btn-block">Confirm Allocation</button>
@@ -666,54 +787,54 @@
 
   <!-- Modal: Download / Print Prescription Slip -->
   <div id="modal-download-prescription" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel modal-lg">
+    <div class="modal-card glass-panel modal-lg" role="dialog" aria-modal="true" aria-labelledby="modal-download-prescription-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-file-pdf"></i> Official Medical Prescription</h3>
-        <button class="btn-close" onclick="closeModal('modal-download-prescription')">&times;</button>
+        <h3 id="modal-download-prescription-title"><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Official Medical Prescription</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-download-prescription')">&times;</button>
       </div>
       <div id="printable-rx-content"></div>
       <div class="top-actions" style="margin-top: 20px; justify-content: flex-end;">
         <button class="btn btn-outline" onclick="closeModal('modal-download-prescription')">Close</button>
-        <button class="btn btn-gradient" onclick="window.print()"><i class="fa-solid fa-print"></i> Print / Save as PDF</button>
+        <button class="btn btn-gradient" onclick="window.print()"><i class="fa-solid fa-print" aria-hidden="true"></i> Print / Save as PDF</button>
       </div>
     </div>
   </div>
 
   <!-- Modal: Add Employee (Staff Only) -->
   <div id="modal-add-employee" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-add-employee-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-user-doctor"></i> Add Doctor / Staff Member</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-employee')">&times;</button>
+        <h3 id="modal-add-employee-title"><i class="fa-solid fa-user-doctor" aria-hidden="true"></i> Add Doctor / Staff Member</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-employee')">&times;</button>
       </div>
       <form onsubmit="handleAddEmployee(event)">
         <div class="form-grid-2">
           <div class="form-group">
-            <label>Employee ID (EID)</label>
+            <label for="emp-eid">Employee ID (EID)</label>
             <input type="text" id="emp-eid" placeholder="EMP011" required />
           </div>
           <div class="form-group">
-            <label>Full Name</label>
+            <label for="emp-name">Full Name</label>
             <input type="text" id="emp-name" placeholder="Dr. Jennifer Lee" required />
           </div>
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label>Department</label>
+            <label for="emp-dept">Department</label>
             <input type="text" id="emp-dept" placeholder="Cardiology / Emergency" required />
           </div>
           <div class="form-group">
-            <label>Mobile Number</label>
+            <label for="emp-mobile">Mobile Number</label>
             <input type="tel" id="emp-mobile" placeholder="9876543210" required />
           </div>
         </div>
         <div class="form-grid-3">
           <div class="form-group">
-            <label>Age</label>
+            <label for="emp-age">Age</label>
             <input type="number" id="emp-age" value="38" />
           </div>
           <div class="form-group">
-            <label>Gender</label>
+            <label for="emp-gender">Gender</label>
             <select id="emp-gender">
               <option>Female</option>
               <option>Male</option>
@@ -721,7 +842,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Salary (INR)</label>
+            <label for="emp-salary">Salary (INR)</label>
             <input type="number" id="emp-salary" value="160000" />
           </div>
         </div>
@@ -732,27 +853,27 @@
 
   <!-- Modal: Add Patient (Staff Only) -->
   <div id="modal-add-patient" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-add-patient-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-hospital-user"></i> Register New Patient</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-patient')">&times;</button>
+        <h3 id="modal-add-patient-title"><i class="fa-solid fa-hospital-user" aria-hidden="true"></i> Register New Patient</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-patient')">&times;</button>
       </div>
       <form onsubmit="handleAddPatient(event)">
         <div class="form-group">
-          <label>Patient Full Name</label>
+          <label for="pat-name">Patient Full Name</label>
           <input type="text" id="pat-name" placeholder="Sarah Jenkins" required />
         </div>
         <div class="form-group">
-          <label>Chief Health Concern / Symptoms</label>
+          <label for="pat-issue">Chief Health Concern / Symptoms</label>
           <input type="text" id="pat-issue" placeholder="Persistent dry cough & fever" required />
         </div>
         <div class="form-grid-3">
           <div class="form-group">
-            <label>Age</label>
+            <label for="pat-age">Age</label>
             <input type="number" id="pat-age" value="28" required />
           </div>
           <div class="form-group">
-            <label>Gender</label>
+            <label for="pat-gender">Gender</label>
             <select id="pat-gender">
               <option>Female</option>
               <option>Male</option>
@@ -760,13 +881,17 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Consultation Fee</label>
+            <label for="pat-fees">Consultation Fee</label>
             <input type="number" id="pat-fees" value="800" />
           </div>
         </div>
         <div class="form-group">
-          <label>Emergency Mobile</label>
+          <label for="pat-mobile">Emergency Mobile</label>
           <input type="tel" id="pat-mobile" placeholder="9876543210" required />
+        </div>
+        <div class="form-group">
+          <label for="pat-guardian">Parent / Guardian Name (required if under 18; confirms guardian consent)</label>
+          <input type="text" id="pat-guardian" />
         </div>
         <button type="submit" class="btn btn-gradient btn-block">Register Patient</button>
       </form>
@@ -775,33 +900,37 @@
 
   <!-- Modal: Book Consultation -->
   <div id="modal-add-consultation" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-add-consultation-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-calendar-check"></i> Book Consultation Appointment</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-consultation')">&times;</button>
+        <h3 id="modal-add-consultation-title"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i> Book Consultation Appointment</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-consultation')">&times;</button>
       </div>
       <form onsubmit="handleBookConsultation(event)">
         <div class="form-group staff-only">
-          <label>Select Patient</label>
+          <label for="con-patient-id">Select Patient</label>
           <select id="con-patient-id"></select>
         </div>
         <div class="form-group">
-          <label>Select Doctor / Specialist</label>
+          <label for="con-doctor-id">Select Doctor / Specialist</label>
           <select id="con-doctor-id" required></select>
         </div>
         <div class="form-group">
-          <label>Appointment Reason</label>
+          <label for="con-reason">Appointment Reason</label>
           <input type="text" id="con-reason" placeholder="Routine check-up or symptom review" required />
         </div>
         <div class="form-grid-2">
-          <div class="form-group">
-            <label>Fee (INR)</label>
-            <input type="number" id="con-fee" value="800" />
+          <div class="form-group staff-only">
+            <label for="con-fee">Fee (INR)</label>
+            <input type="number" id="con-fee" value="800" min="0" />
           </div>
           <div class="form-group">
-            <label>Preferred Date & Time</label>
+            <label for="con-time">Preferred Date & Time</label>
             <input type="datetime-local" id="con-time" required />
           </div>
+        </div>
+        <div class="fee-summary patient-only">
+          <span>Consultation fee:</span> <strong class="con-fee-display">₹0.00</strong><br />
+          <small>This is the only charge for the consultation. Tests or medicines your doctor recommends are priced separately and only with your agreement. Cancellation terms are in our <a class="link-inline" href="/refunds" target="_blank" rel="noopener">Refund Policy</a>.</small>
         </div>
         <button type="submit" class="btn btn-primary btn-block">Confirm Appointment</button>
       </form>
@@ -810,22 +939,22 @@
 
   <!-- Modal: Issue Prescription (Staff Only) -->
   <div id="modal-add-prescription" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel modal-lg">
+    <div class="modal-card glass-panel modal-lg" role="dialog" aria-modal="true" aria-labelledby="modal-add-prescription-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-file-prescription"></i> Issue Digital Prescription</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-prescription')">&times;</button>
+        <h3 id="modal-add-prescription-title"><i class="fa-solid fa-file-prescription" aria-hidden="true"></i> Issue Digital Prescription</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-prescription')">&times;</button>
       </div>
       <form onsubmit="handleCreatePrescription(event)">
         <div class="form-group">
-          <label>Linked Consultation</label>
+          <label for="rx-consultation-id">Linked Consultation</label>
           <select id="rx-consultation-id" required></select>
         </div>
         <div class="form-group">
-          <label>Clinical Diagnosis</label>
+          <label for="rx-diagnosis">Clinical Diagnosis</label>
           <input type="text" id="rx-diagnosis" placeholder="Acute Bronchitis & Low Oxygen" required />
         </div>
         <div class="form-group">
-          <label>Dietary / Recovery Instructions</label>
+          <label for="rx-instructions">Dietary / Recovery Instructions</label>
           <textarea id="rx-instructions" rows="2" placeholder="Drink warm fluids, steam inhalation twice a day."></textarea>
         </div>
 
@@ -833,12 +962,12 @@
           <label style="font-weight: 700; margin-bottom: 8px; display: block;">Prescribed Medicines Schedule:</label>
           <div id="rx-meds-container"></div>
           <button type="button" class="btn btn-sm btn-outline" onclick="addMedicineRow()">
-            <i class="fa-solid fa-plus"></i> Add Medicine Row
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Medicine Row
           </button>
         </div>
 
         <button type="submit" class="btn btn-gradient btn-block" style="margin-top: 16px;">
-          <i class="fa-solid fa-check-circle"></i> Finalize & Issue Prescription
+          <i class="fa-solid fa-check-circle" aria-hidden="true"></i> Finalize & Issue Prescription
         </button>
       </form>
     </div>
@@ -846,18 +975,18 @@
 
   <!-- Modal: Add Medicine (Staff Only) -->
   <div id="modal-add-medicine" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-add-medicine-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-pills"></i> Restock / Add Medicine</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-medicine')">&times;</button>
+        <h3 id="modal-add-medicine-title"><i class="fa-solid fa-pills" aria-hidden="true"></i> Restock / Add Medicine</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-medicine')">&times;</button>
       </div>
       <form onsubmit="handleAddMedicine(event)">
         <div class="form-group">
-          <label>Medicine Name & Strength</label>
+          <label for="med-name">Medicine Name & Strength</label>
           <input type="text" id="med-name" placeholder="Amoxicillin 500mg" required />
         </div>
         <div class="form-group">
-          <label>Formulation Type</label>
+          <label for="med-type">Formulation Type</label>
           <select id="med-type">
             <option>Tablet</option>
             <option>Capsule</option>
@@ -869,11 +998,11 @@
         </div>
         <div class="form-grid-2">
           <div class="form-group">
-            <label>Stock Quantity</label>
+            <label for="med-stock">Stock Quantity</label>
             <input type="number" id="med-stock" value="100" min="0" required />
           </div>
           <div class="form-group">
-            <label>Unit Price (INR)</label>
+            <label for="med-price">Unit Price (INR)</label>
             <input type="number" id="med-price" step="0.5" value="75.0" min="0" required />
           </div>
         </div>
@@ -884,18 +1013,18 @@
 
   <!-- Modal: Add Ambulance (Staff Only) -->
   <div id="modal-add-emt" class="modal-backdrop hidden">
-    <div class="modal-card glass-panel">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-add-emt-title">
       <div class="modal-head">
-        <h3><i class="fa-solid fa-truck-medical"></i> Register Ambulance Vehicle</h3>
-        <button class="btn-close" onclick="closeModal('modal-add-emt')">&times;</button>
+        <h3 id="modal-add-emt-title"><i class="fa-solid fa-truck-medical" aria-hidden="true"></i> Register Ambulance Vehicle</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-add-emt')">&times;</button>
       </div>
       <form onsubmit="handleAddEmt(event)">
         <div class="form-group">
-          <label>Vehicle License Plate</label>
+          <label for="emt-vno">Vehicle License Plate</label>
           <input type="text" id="emt-vno" placeholder="KA01XY9999" required />
         </div>
         <div class="form-group">
-          <label>Vehicle Type</label>
+          <label for="emt-vtype">Vehicle Type</label>
           <select id="emt-vtype">
             <option>Advanced Cardiac Life Support (ALS)</option>
             <option>Basic Trauma Life Support (BLS)</option>
@@ -904,11 +1033,11 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Driver Name</label>
+          <label for="emt-driver">Driver Name</label>
           <input type="text" id="emt-driver" placeholder="Kiran Shetty" required />
         </div>
         <div class="form-group">
-          <label>Emergency Hotline Mobile</label>
+          <label for="emt-mobile">Emergency Hotline Mobile</label>
           <input type="tel" id="emt-mobile" placeholder="9876543210" required />
         </div>
         <button type="submit" class="btn btn-primary btn-block">Add Ambulance to Fleet</button>
@@ -916,8 +1045,54 @@
     </div>
   </div>
 
+  <!-- Modal: Request account deletion -->
+  <div id="modal-delete-account" class="modal-backdrop hidden">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-delete-account-title">
+      <div class="modal-head">
+        <h3 id="modal-delete-account-title"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Request Account Deletion</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-delete-account')">&times;</button>
+      </div>
+      <form onsubmit="handleDeletionRequest(event)">
+        <p class="text-muted" style="margin-bottom: 12px; font-size: 13px; line-height: 1.6;">
+          We will delete your login and personal data within 30 days. Consultation and prescription records must be kept for the period required by medical-record law; they are unlinked from your account and deleted when that period ends. You can download your data first.
+        </p>
+        <div class="form-group">
+          <label for="delete-reason">Reason (optional)</label>
+          <textarea id="delete-reason" rows="2" maxlength="500"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="delete-password">Confirm your password</label>
+          <input type="password" id="delete-password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-danger-sm btn-block" style="padding: 10px;">Submit deletion request</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cookie consent banner -->
+  <section id="cookie-banner" class="cookie-banner hidden" role="region" aria-labelledby="cookie-banner-title">
+    <h2 id="cookie-banner-title">Cookies on PulseCare+</h2>
+    <p>We use one strictly necessary cookie to keep you signed in, and your browser's local storage to remember this choice. We do not use analytics, advertising or tracking cookies, and no third-party services are loaded. Read our <a class="link-inline" href="/cookies">Cookie Policy</a>.</p>
+    <fieldset class="consent-fieldset cookie-prefs hidden" id="cookie-prefs">
+      <legend>Cookie preferences</legend>
+      <label class="consent-item">
+        <input type="checkbox" checked disabled />
+        <span><strong>Strictly necessary</strong> &mdash; sign-in session and security. Always on.</span>
+      </label>
+      <label class="consent-item">
+        <input type="checkbox" id="cookie-pref-analytics" />
+        <span><strong>Analytics</strong> &mdash; not currently used. If added, it will stay off unless you turn it on here.</span>
+      </label>
+    </fieldset>
+    <div class="cookie-banner-actions">
+      <button type="button" class="btn btn-outline" onclick="saveCookieConsent(false)">Necessary only</button>
+      <button type="button" class="btn btn-outline" id="cookie-manage-btn" onclick="toggleCookiePrefs()">Manage preferences</button>
+      <button type="button" class="btn btn-outline" onclick="saveCookieConsent(true)">Accept all</button>
+    </div>
+  </section>
+
   <!-- Toast Notification Container -->
-  <div id="toast-container" class="toast-container"></div>
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
   <script src="/js/app.js"></script>
 </body>

@@ -1,0 +1,125 @@
+/* Shared styles for the legal pages (light theme, WCAG AA contrast). */
+:root {
+  --text: #0f172a;
+  --muted: #475569;
+  --link: #0369a1;
+  --bg: #ffffff;
+  --panel: #f1f5f9;
+  --border: #cbd5e1;
+  --notice-bg: #fef3c7;
+  --notice-text: #78350f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --text: #f1f5f9;
+    --muted: #cbd5e1;
+    --link: #7dd3fc;
+    --bg: #0b132b;
+    --panel: #15203f;
+    --border: #334155;
+    --notice-bg: #78350f;
+    --notice-text: #fef3c7;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -60px;
+  background: var(--link);
+  color: var(--bg);
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+.skip-link:focus { top: 12px; }
+
+:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.legal-header, .legal-footer {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+
+.legal-footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.legal-header nav, .legal-footer nav {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.legal-footer .business-details { max-width: 820px; margin: 8px auto 0; }
+
+a { color: var(--link); }
+
+.legal-main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+h1 { font-size: 30px; line-height: 1.25; margin: 8px 0 4px; }
+h2 { font-size: 21px; margin-top: 32px; }
+h3 { font-size: 17px; margin-top: 20px; }
+
+.updated { color: var(--muted); margin-top: 0; }
+
+.review-notice {
+  background: var(--notice-bg);
+  color: var(--notice-text);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th { background: var(--panel); }
+
+.table-wrap { overflow-x: auto; }
+
+button {
+  font: inherit;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}

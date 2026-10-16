@@ -6,9 +6,12 @@ let activeUser = null;
 let activeView = 'dashboard';
 let hospitalBedsCache = [];
 let pharmacyInventoryCache = [];
+let siteInfo = { business: {}, demo_mode: false, staff_signup_enabled: false, consultation_fee: 0 };
 
 // Initialize app when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', async () => {
+  initCookieConsent();
+  await loadSiteInfo();
   await verifySessionState();
   if (activeUser) {
     applyRolePermissions();
@@ -20,40 +23,99 @@ document.addEventListener('DOMContentLoaded', async () => {
    1. Password Toggle & Authentication Handlers
    -------------------------------------------------------------------------- */
 
-function togglePasswordVisibility(inputFieldId, eyeIconId) {
+function togglePasswordVisibility(inputFieldId, eyeIconId, toggleButton) {
   const passwordInput = document.getElementById(inputFieldId);
   const eyeIcon = document.getElementById(eyeIconId);
 
   if (!passwordInput || !eyeIcon) return;
 
-  if (passwordInput.type === 'password') {
-    passwordInput.type = 'text';
-    eyeIcon.classList.remove('fa-eye');
-    eyeIcon.classList.add('fa-eye-slash');
-  } else {
-    passwordInput.type = 'password';
-    eyeIcon.classList.remove('fa-eye-slash');
-    eyeIcon.classList.add('fa-eye');
+  const willShow = passwordInput.type === 'password';
+  passwordInput.type = willShow ? 'text' : 'password';
+  eyeIcon.classList.toggle('fa-eye', !willShow);
+  eyeIcon.classList.toggle('fa-eye-slash', willShow);
+  if (toggleButton) {
+    toggleButton.setAttribute('aria-pressed', String(willShow));
+    toggleButton.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
   }
 }
 
 function switchAuthTab(targetTab) {
-  const loginForm = document.getElementById('login-form');
-  const signupForm = document.getElementById('signup-form');
+  const isLogin = targetTab === 'login';
   const loginTabBtn = document.getElementById('tab-login');
   const signupTabBtn = document.getElementById('tab-signup');
 
-  if (targetTab === 'login') {
-    loginForm.classList.remove('hidden');
-    signupForm.classList.add('hidden');
-    loginTabBtn.classList.add('active');
-    signupTabBtn.classList.remove('active');
-  } else {
-    loginForm.classList.add('hidden');
-    signupForm.classList.remove('hidden');
-    loginTabBtn.classList.remove('active');
-    signupTabBtn.classList.add('active');
+  document.getElementById('login-form').classList.toggle('hidden', !isLogin);
+  document.getElementById('signup-form').classList.toggle('hidden', isLogin);
+  loginTabBtn.classList.toggle('active', isLogin);
+  signupTabBtn.classList.toggle('active', !isLogin);
+  loginTabBtn.setAttribute('aria-selected', String(isLogin));
+  signupTabBtn.setAttribute('aria-selected', String(!isLogin));
+  loginTabBtn.tabIndex = isLogin ? 0 : -1;
+  signupTabBtn.tabIndex = isLogin ? -1 : 0;
+}
+
+// Arrow keys move between the Sign In / Create Account tabs (WAI-ARIA tabs pattern)
+function handleAuthTabKeys(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const target = event.currentTarget.id === 'tab-login' ? 'signup' : 'login';
+  const goTo = event.key === 'Home' ? 'login' : event.key === 'End' ? 'signup' : target;
+  switchAuthTab(goTo);
+  document.getElementById(`tab-${goTo}`).focus();
+}
+
+function skipToMain(event) {
+  event.preventDefault();
+  const main = activeUser ? document.getElementById('main-content') : document.getElementById('auth-screen');
+  if (main) main.focus();
+}
+
+/* --------------------------------------------------------------------------
+   Business details, demo mode & sign-up consent
+   -------------------------------------------------------------------------- */
+
+async function loadSiteInfo() {
+  try {
+    const response = await fetch('/api/site-info');
+    siteInfo = await response.json();
+  } catch (err) {
+    console.error('Error loading site info:', err);
   }
+
+  const biz = siteInfo.business || {};
+  const detailsHtml = `
+    <p><strong>${escapeHtml(biz.trading_name)}</strong> is operated by ${escapeHtml(biz.name)}, ${escapeHtml(biz.address)}.</p>
+    <p>Registration: ${escapeHtml(biz.registration)} &middot; Tax ID: ${escapeHtml(biz.tax_id)} &middot; Contact: ${escapeHtml(biz.email)} &middot; ${escapeHtml(biz.phone)}</p>
+    <p>In a medical emergency, call your local emergency number. This portal is not an emergency service.</p>
+  `;
+  document.querySelectorAll('.business-details').forEach((el) => { el.innerHTML = detailsHtml; });
+
+  document.getElementById('demo-banner').classList.toggle('hidden', !siteInfo.demo_mode);
+  document.querySelectorAll('.quick-demo-accounts').forEach((el) => el.classList.toggle('hidden', !siteInfo.demo_mode));
+
+  const staffRadio = document.querySelector('input[name="signup-role"][value="staff"]');
+  if (staffRadio && !siteInfo.staff_signup_enabled) {
+    staffRadio.disabled = true;
+    staffRadio.closest('.role-card').querySelector('small').textContent = 'Accounts issued by your administrator';
+  }
+
+  document.querySelectorAll('.con-fee-display').forEach((el) => {
+    el.textContent = `₹${Number(siteInfo.consultation_fee || 0).toFixed(2)}`;
+  });
+}
+
+function updateSignupRole() {
+  const role = document.querySelector('input[name="signup-role"]:checked').value;
+  document.getElementById('staff-invite-group').classList.toggle('hidden', role !== 'staff');
+  document.getElementById('health-consent-row').classList.toggle('hidden', role !== 'patient');
+}
+
+function updateSignupAgeGroup() {
+  const selected = document.querySelector('input[name="signup-age-group"]:checked');
+  const isMinor = selected && selected.value === 'minor';
+  document.getElementById('guardian-fields').classList.toggle('hidden', !isMinor);
+  document.getElementById('signup-guardian-name').required = isMinor;
+  document.getElementById('signup-guardian-consent').required = isMinor;
 }
 
 function fillDemo(username, password) {
@@ -90,6 +152,12 @@ async function handleSignup(event) {
   const usernameVal = document.getElementById('signup-username').value.trim();
   const passwordVal = document.getElementById('signup-password').value.trim();
   const roleVal = document.querySelector('input[name="signup-role"]:checked').value;
+  const ageGroup = document.querySelector('input[name="signup-age-group"]:checked');
+
+  if (roleVal === 'patient' && !document.getElementById('signup-health-consent').checked) {
+    notifyUser('Please give explicit consent to the processing of health information to register as a patient.', 'error');
+    return;
+  }
 
   try {
     const response = await fetch('/api/auth/register', {
@@ -100,7 +168,14 @@ async function handleSignup(event) {
         mobile_no: mobileVal,
         username: usernameVal,
         password: passwordVal,
-        role: roleVal
+        role: roleVal,
+        staff_invite_code: document.getElementById('signup-invite-code').value.trim(),
+        age_group: ageGroup ? ageGroup.value : null,
+        guardian_name: document.getElementById('signup-guardian-name').value.trim(),
+        guardian_consent: document.getElementById('signup-guardian-consent').checked,
+        accept_terms: document.getElementById('signup-accept-terms').checked,
+        health_data_consent: roleVal === 'patient' && document.getElementById('signup-health-consent').checked,
+        marketing_opt_in: document.getElementById('signup-marketing').checked
       })
     });
     const payload = await response.json();
@@ -167,17 +242,16 @@ function applyRolePermissions() {
   const isStaff = activeUser && activeUser.role === 'staff';
 
   document.querySelectorAll('.staff-only').forEach((elem) => {
-    if (isStaff) {
-      elem.classList.remove('hidden');
-    } else {
-      elem.classList.add('hidden');
-    }
+    elem.classList.toggle('hidden', !isStaff);
   });
-
-  const patientNavText = document.getElementById('nav-patients-text');
-  if (patientNavText) {
-    patientNavText.textContent = isStaff ? 'All Patients (20)' : 'My Medical Profile';
-  }
+  document.querySelectorAll('.patient-only').forEach((elem) => {
+    elem.classList.toggle('hidden', isStaff);
+  });
+  // Demo-only controls (sample logins, reset button) stay hidden on a live deployment
+  document.querySelectorAll('.demo-only').forEach((elem) => {
+    if (!siteInfo.demo_mode) elem.classList.add('hidden');
+    else if (!elem.classList.contains('staff-only') || isStaff) elem.classList.remove('hidden');
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -190,11 +264,15 @@ function switchView(targetViewKey) {
   // Update Sidebar Active States
   document.querySelectorAll('.sidebar-nav .nav-item').forEach((button) => {
     button.classList.remove('active');
+    button.removeAttribute('aria-current');
   });
 
   const activeNavButton = Array.from(document.querySelectorAll('.sidebar-nav .nav-item'))
-    .find((btn) => btn.getAttribute('onclick')?.includes(targetViewKey));
-  if (activeNavButton) activeNavButton.classList.add('active');
+    .find((btn) => btn.getAttribute('onclick')?.includes(`'${targetViewKey}'`));
+  if (activeNavButton) {
+    activeNavButton.classList.add('active');
+    activeNavButton.setAttribute('aria-current', 'page');
+  }
 
   // Toggle View Panels
   document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
@@ -212,10 +290,12 @@ function switchView(targetViewKey) {
   }
 
   const routeHeaders = {
-    dashboard: ['Hospital Overview', 'Real-time clinical metrics & status'],
-    beds: ['Hospital Ward Bed Matrix (70 Beds)', 'Live theatre-style visualization of admitted patients & occupancy'],
-    employees: ['Medical Specialists & Doctors', 'Registry of 10 clinical practitioners and specialists'],
-    patients: [activeUser.role === 'staff' ? 'Patient Database (20 Records)' : 'My Medical Profile', 'Inpatient and outpatient clinical histories'],
+    dashboard: ['Hospital Overview', 'Current clinical metrics & status'],
+    beds: ['Hospital Ward Bed Map', 'Bed occupancy by ward'],
+    employees: ['Medical Specialists & Doctors', 'Registry of clinical practitioners and specialists'],
+    patients: [activeUser.role === 'staff' ? 'Patient Database' : 'My Medical Profile', 'Inpatient and outpatient clinical histories'],
+    profile: ['My Medical Profile', 'Your health record, purchases and privacy controls'],
+    privacy: ['Privacy Requests', 'Data deletion requests from patients and staff'],
     consultations: ['Consultation Appointments', 'Scheduled clinical appointments & status'],
     prescriptions: ['Digital Prescriptions & Rx Slip', 'Doctor diagnoses, dosage plans & printable slips'],
     pharmacy: ['Pharmacy Stock & Formulations', 'Inventory levels, rates & instant restock/purchase'],
@@ -235,6 +315,8 @@ function switchView(targetViewKey) {
   if (targetViewKey === 'prescriptions') loadPrescriptionsRegistry();
   if (targetViewKey === 'pharmacy') loadPharmacyInventory();
   if (targetViewKey === 'emt') loadAmbulanceFleet();
+  if (targetViewKey === 'profile') loadPatientProfile();
+  if (targetViewKey === 'privacy') loadPrivacyRequests();
 }
 
 function openNewActionModal() {
@@ -252,6 +334,7 @@ async function refreshDashboard() {
 
     document.getElementById('stat-consultations').textContent = metrics.scheduled_consultations || 0;
     document.getElementById('stat-available-beds').textContent = metrics.available_beds || 0;
+    document.getElementById('stat-total-beds').textContent = metrics.total_beds || 0;
     document.getElementById('stat-patients').textContent = metrics.patients || 0;
     document.getElementById('stat-employees').textContent = metrics.employees || 0;
     document.getElementById('stat-ambulances').textContent = metrics.available_ambulances || 0;
@@ -326,30 +409,41 @@ function renderBedsMatrix(beds) {
             const isOccupied = bed.STATUS === 'Occupied';
             const isAvailable = bed.STATUS === 'Available';
 
+            // Patients never receive other patients' details from the API; only staff or the bed's own patient see them.
+            const showPatient = isOccupied && (isStaff || bed.IS_MINE);
+            const actionHint = isOccupied
+              ? (isStaff ? 'Select to discharge' : '')
+              : isAvailable ? (isStaff ? 'Select to allocate a patient' : 'Select to reserve') : '';
+            const accessibleLabel = [
+              `${bed.WARD_TYPE} ${bed.BED_NUMBER}`,
+              bed.STATUS,
+              showPatient ? `patient ${bed.PATIENT_NAME || ''}` : '',
+              bed.IS_MINE ? 'your bed' : '',
+              actionHint
+            ].filter(Boolean).join(', ');
+
             return `
-              <div class="bed-seat-card ${stateClass}" onclick="handleBedCardClick('${bed.BED_ID}')">
-                <i class="fa-solid fa-bed"></i>
+              <button type="button" class="bed-seat-card ${stateClass}" onclick="handleBedCardClick('${bed.BED_ID}')" aria-label="${escapeHtml(accessibleLabel)}" ${bed.STATUS === 'Maintenance' ? 'aria-disabled="true"' : ''}>
+                <i class="fa-solid fa-bed" aria-hidden="true"></i>
                 <span class="bed-number">${escapeHtml(bed.BED_NUMBER)}</span>
-                <span class="bed-status-tag">${bed.STATUS}</span>
-                
-                ${isOccupied ? `
-                  <div class="bed-tooltip">
-                    <h4><i class="fa-solid fa-user"></i> ${escapeHtml(bed.PATIENT_NAME || 'Admitted Patient')}</h4>
-                    <p><strong>Age/Gender:</strong> ${bed.PATIENT_AGE || '--'} yrs / ${escapeHtml(bed.PATIENT_GENDER || '--')}</p>
-                    <p><strong>Condition:</strong> ${escapeHtml(bed.PATIENT_ISSUE || 'Under observation')}</p>
-                    <p><strong>Admitted:</strong> ${escapeHtml(bed.ASSIGNED_DATE || 'Recent')}</p>
-                    ${isStaff ? '<p style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">Click to Discharge Bed</p>' : ''}
-                  </div>
+                <span class="bed-status-tag">${bed.IS_MINE ? 'Your bed' : bed.STATUS}</span>
+
+                ${showPatient ? `
+                  <span class="bed-tooltip" aria-hidden="true">
+                    <span class="tt-title"><i class="fa-solid fa-user" aria-hidden="true"></i> ${escapeHtml(bed.PATIENT_NAME || 'Admitted Patient')}</span>
+                    <span class="tt-line"><strong>Age/Gender:</strong> ${bed.PATIENT_AGE || '--'} yrs / ${escapeHtml(bed.PATIENT_GENDER || '--')}</span>
+                    <span class="tt-line"><strong>Condition:</strong> ${escapeHtml(bed.PATIENT_ISSUE || 'Under observation')}</span>
+                    <span class="tt-line"><strong>Admitted:</strong> ${escapeHtml(bed.ASSIGNED_DATE || 'Recent')}</span>
+                    ${actionHint ? `<span class="tt-line" style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">${actionHint}</span>` : ''}
+                  </span>
                 ` : `
-                  <div class="bed-tooltip">
-                    <h4>Bed ${escapeHtml(bed.BED_NUMBER)}</h4>
-                    <p style="color: #34d399;">Sanitized & Available.</p>
-                    <p style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">
-                      ${isStaff ? 'Click to Allocate Patient' : 'Click to Reserve this Bed'}
-                    </p>
-                  </div>
+                  <span class="bed-tooltip" aria-hidden="true">
+                    <span class="tt-title">${escapeHtml(bed.BED_NUMBER)}</span>
+                    <span class="tt-line">${escapeHtml(bed.STATUS)}</span>
+                    ${actionHint ? `<span class="tt-line" style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">${actionHint}</span>` : ''}
+                  </span>
                 `}
-              </div>
+              </button>
             `;
           }).join('')}
         </div>
@@ -365,7 +459,7 @@ async function handleBedCardClick(bedId) {
   // Patient Bed Booking Flow
   if (activeUser.role === 'patient') {
     if (bed.STATUS === 'Available') {
-      if (confirm(`Would you like to reserve Bed ${bed.BED_NUMBER} in ${bed.WARD_TYPE}?`)) {
+      if (confirm(`Reserve ${bed.BED_NUMBER} in ${bed.WARD_TYPE}?\n\nNo payment is taken through this portal for reserving a bed. Ward charges, if any, are explained by the admissions desk before admission.`)) {
         try {
           const response = await fetch('/api/beds/book', {
             method: 'POST',
@@ -383,7 +477,7 @@ async function handleBedCardClick(bedId) {
         }
       }
     } else if (bed.STATUS === 'Occupied') {
-      notifyUser(`Bed ${bed.BED_NUMBER} is currently occupied by patient ${bed.PATIENT_NAME}.`, 'info');
+      notifyUser(bed.IS_MINE ? `${bed.BED_NUMBER} is reserved for you.` : `${bed.BED_NUMBER} is currently occupied.`, 'info');
     } else {
       notifyUser(`Bed ${bed.BED_NUMBER} is undergoing maintenance.`, 'info');
     }
@@ -601,8 +695,8 @@ async function loadDoctorsRegistry() {
         <td>₹${Number(doc.SALARY).toLocaleString()}</td>
         <td><a href="tel:${doc.MOBILE_NO}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone"></i> ${escapeHtml(doc.MOBILE_NO || 'N/A')}</a></td>
         <td>
-          <button class="btn-danger-sm" onclick="deleteDoctorRecord('${doc.EID}')" title="Delete doctor record">
-            <i class="fa-solid fa-trash"></i>
+          <button class="btn-danger-sm" onclick="deleteDoctorRecord('${doc.EID}')" title="Delete doctor record" aria-label="Delete ${escapeHtml(doc.NAME)}">
+            <i class="fa-solid fa-trash" aria-hidden="true"></i>
           </button>
         </td>
       </tr>
@@ -670,20 +764,21 @@ async function loadPatientsRegistry() {
       <tr>
         <td><code>${escapeHtml(pat.PID)}</code></td>
         <td><strong>${escapeHtml(pat.NAME)}</strong></td>
-        <td>${escapeHtml(pat.ISSUE || 'General Checkup')}</td>
-        <td>${pat.AGE || '--'} / ${escapeHtml(pat.GENDER || '--')}</td>
-        <td>₹${Number(pat.FEES || 0).toLocaleString()}</td>
-        <td><a href="tel:${pat.MOBILE_NO}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone"></i> ${escapeHtml(pat.MOBILE_NO || 'N/A')}</a></td>
+        <td>${escapeHtml(pat.ISSUE || 'General Checkup')}<br /><small class="text-muted">${escapeHtml(pat.MEDICAL_HISTORY || '')}</small></td>
+        <td>${escapeHtml(pat.BLOOD_GROUP || '--')} / ${escapeHtml(pat.ALLERGIES || '--')}</td>
+        <td>${pat.AGE || '--'} / ${escapeHtml(pat.GENDER || '--')}${pat.GUARDIAN_NAME ? `<br /><small class="text-muted">Guardian: ${escapeHtml(pat.GUARDIAN_NAME)}</small>` : ''}</td>
+        <td>${pat.BED_NUMBER ? `${escapeHtml(pat.BED_NUMBER)} <small class="text-muted">(${escapeHtml(pat.WARD_TYPE)})</small>` : '--'}</td>
+        <td><a href="tel:${escapeHtml(pat.MOBILE_NO)}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(pat.MOBILE_NO || 'N/A')}</a></td>
         <td><span class="badge-role">${escapeHtml(pat.BILL_NO || 'N/A')}</span></td>
         ${isStaff ? `
           <td>
-            <button class="btn-danger-sm" onclick="deletePatientRecord('${pat.PID}')" title="Delete record">
-              <i class="fa-solid fa-trash"></i>
+            <button class="btn-danger-sm" onclick="deletePatientRecord('${pat.PID}')" title="Delete record" aria-label="Delete patient ${escapeHtml(pat.NAME)}">
+              <i class="fa-solid fa-trash" aria-hidden="true"></i>
             </button>
           </td>
         ` : ''}
       </tr>
-    `).join('') || '<tr><td colspan="8">No patient records available.</td></tr>';
+    `).join('') || '<tr><td colspan="9">No patient records available.</td></tr>';
   } catch (err) {
     notifyUser('Failed to load patient database', 'error');
   }
@@ -697,7 +792,8 @@ async function handleAddPatient(event) {
     AGE: parseInt(document.getElementById('pat-age').value, 10),
     GENDER: document.getElementById('pat-gender').value,
     FEES: parseFloat(document.getElementById('pat-fees').value),
-    MOBILE_NO: document.getElementById('pat-mobile').value.trim()
+    MOBILE_NO: document.getElementById('pat-mobile').value.trim(),
+    GUARDIAN_NAME: document.getElementById('pat-guardian').value.trim()
   };
 
   const response = await fetch('/api/patients', {
@@ -819,10 +915,10 @@ function addMedicineRow() {
   const row = document.createElement('div');
   row.className = 'medicine-row';
   row.innerHTML = `
-    <input type="text" placeholder="Medicine Name (e.g. Paracetamol 650mg)" class="rx-med-name" required />
-    <input type="text" placeholder="Dosage (e.g. 1 Tablet)" class="rx-med-dosage" value="1 Tablet" />
-    <input type="text" placeholder="Frequency (e.g. Twice daily)" class="rx-med-freq" value="Twice daily after meals" />
-    <button type="button" class="btn-danger-sm" onclick="this.parentElement.remove()" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+    <input type="text" placeholder="Medicine Name (e.g. Paracetamol 650mg)" class="rx-med-name" aria-label="Medicine name" required />
+    <input type="text" placeholder="Dosage (e.g. 1 Tablet)" class="rx-med-dosage" aria-label="Dosage" value="1 Tablet" />
+    <input type="text" placeholder="Frequency (e.g. Twice daily)" class="rx-med-freq" aria-label="Frequency" value="Twice daily after meals" />
+    <button type="button" class="btn-danger-sm" onclick="this.parentElement.remove()" title="Remove" aria-label="Remove medicine row"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
   `;
   container.appendChild(row);
 }
@@ -919,9 +1015,9 @@ async function openPrescriptionSlip(prescriptionId) {
       <div class="prescription-slip">
         <div class="slip-header">
           <div>
-            <div class="slip-hospital-title">PulseCare+ Specialty Hospital</div>
-            <p style="font-size: 12px; color: #64748b;">Emergency Care & Multi-Specialty Clinical Center</p>
-            <p style="font-size: 11px; color: #64748b;">24/7 Hotline: +91 98765 43210 | www.pulsecare.hospital</p>
+            <div class="slip-hospital-title">${escapeHtml(siteInfo.business.trading_name)}</div>
+            <p style="font-size: 12px; color: #475569;">${escapeHtml(siteInfo.business.name)}, ${escapeHtml(siteInfo.business.address)}</p>
+            <p style="font-size: 11px; color: #475569;">Reg. ${escapeHtml(siteInfo.business.registration)} | ${escapeHtml(siteInfo.business.phone)} | ${escapeHtml(siteInfo.business.email)}</p>
           </div>
           <div style="text-align: right;">
             <span style="font-size: 18px; font-weight: 800; color: #0284c7;">℞ PRESCRIPTION</span>
@@ -972,7 +1068,7 @@ async function openPrescriptionSlip(prescriptionId) {
         </table>
 
         <div class="slip-footer">
-          <p style="font-size: 11px; color: #64748b;">Digitally verified & validated medical record.</p>
+          <p style="font-size: 11px; color: #475569;">Generated electronically from the ${escapeHtml(siteInfo.business.trading_name)} records system. Not valid without the prescribing doctor's signature.</p>
           <div class="slip-sign-line">
             Dr. ${escapeHtml(rx.DOCTOR_NAME)}<br>
             <span style="font-size: 10px; font-weight: normal;">Authorized Medical Officer</span>
@@ -1003,11 +1099,11 @@ async function loadAmbulanceFleet() {
         <td><code>${escapeHtml(amb.VNO)}</code></td>
         <td><strong>${escapeHtml(amb.VTYPE)}</strong></td>
         <td>${escapeHtml(amb.DRIVER_NAME)}</td>
-        <td><a href="tel:${amb.MOBILE_NO}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone"></i> ${escapeHtml(amb.MOBILE_NO)}</a></td>
+        <td><a href="tel:${escapeHtml(amb.MOBILE_NO)}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(amb.MOBILE_NO)}</a></td>
         <td><span class="status-pill status-${amb.STATUS.toLowerCase()}">${amb.STATUS}</span></td>
         ${isStaff ? `
           <td>
-            <select onchange="updateAmbulanceStatus('${amb.VNO}', this.value)" style="padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color);">
+            <select aria-label="Change status of ${escapeHtml(amb.VNO)}" onchange="updateAmbulanceStatus('${amb.VNO}', this.value)" style="padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color);">
               <option value="Available" ${amb.STATUS === 'Available' ? 'selected' : ''}>Available</option>
               <option value="Dispatched" ${amb.STATUS === 'Dispatched' ? 'selected' : ''}>Dispatched</option>
               <option value="Maintenance" ${amb.STATUS === 'Maintenance' ? 'selected' : ''}>Maintenance</option>
@@ -1068,7 +1164,10 @@ async function updateAmbulanceStatus(vehicleNo, newStatus) {
    11. Modal Selectors & Helpers
    -------------------------------------------------------------------------- */
 
+let modalReturnFocus = null;
+
 function openModal(modalId) {
+  modalReturnFocus = document.activeElement;
   if (modalId === 'modal-add-consultation') {
     populateConsultationSelectors();
   }
@@ -1081,12 +1180,51 @@ function openModal(modalId) {
   if (modalId === 'modal-assign-bed') {
     populateBedAllocationSelectors();
   }
-  document.getElementById(modalId)?.classList.remove('hidden');
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  // Move keyboard focus into the dialog (after async selectors have rendered)
+  setTimeout(() => {
+    const focusables = getFocusable(modal);
+    const firstField = focusables.find((el) => !el.classList.contains('btn-close')) || focusables[0];
+    if (firstField) firstField.focus();
+  }, 200);
 }
 
 function closeModal(modalId) {
   document.getElementById(modalId)?.classList.add('hidden');
+  if (modalReturnFocus && document.body.contains(modalReturnFocus)) modalReturnFocus.focus();
+  modalReturnFocus = null;
 }
+
+function getFocusable(container) {
+  return Array.from(container.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter((el) => el.offsetParent !== null);
+}
+
+// Escape closes the open dialog; Tab stays inside it
+document.addEventListener('keydown', (event) => {
+  const openDialog = Array.from(document.querySelectorAll('.modal-backdrop')).find((m) => !m.classList.contains('hidden'));
+  if (!openDialog) return;
+  if (event.key === 'Escape') {
+    closeModal(openDialog.id);
+    return;
+  }
+  if (event.key === 'Tab') {
+    const focusables = getFocusable(openDialog);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+});
 
 async function populateConsultationSelectors() {
   const patientSelect = document.getElementById('con-patient-id');
@@ -1135,7 +1273,7 @@ async function populateBedAllocationSelectors() {
 }
 
 async function resetDatabasePrompt() {
-  if (confirm('Reset the database with 70 Ward Beds, 10 Doctors, and 20 Patients?')) {
+  if (confirm('Reset the database to the fictional demo data? All changes will be lost.')) {
     const response = await fetch('/api/admin/reset', { method: 'POST' });
     const payload = await response.json();
     notifyUser(payload.message, 'success');
@@ -1167,7 +1305,7 @@ function notifyUser(message, statusType = 'info') {
   if (!toastWrapper) return;
   const toastItem = document.createElement('div');
   toastItem.className = `toast toast-${statusType}`;
-  toastItem.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>${escapeHtml(message)}</span>`;
+  toastItem.innerHTML = `<i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>${escapeHtml(message)}</span>`;
   toastWrapper.appendChild(toastItem);
   setTimeout(() => toastItem.remove(), 4000);
 }
@@ -1178,5 +1316,230 @@ function escapeHtml(rawString) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* --------------------------------------------------------------------------
+   12. Patient Profile, Privacy Controls & Data Deletion
+   -------------------------------------------------------------------------- */
+
+async function loadPatientProfile() {
+  try {
+    const response = await fetch('/api/patient/profile');
+    const profile = await response.json();
+    if (response.ok) {
+      document.getElementById('profile-pid-badge').textContent = profile.PID;
+      document.getElementById('prof-name').value = profile.NAME || '';
+      document.getElementById('prof-mobile').value = profile.MOBILE_NO || '';
+      document.getElementById('prof-age').value = profile.AGE ?? '';
+      document.getElementById('prof-gender').value = profile.GENDER || 'Other';
+      document.getElementById('prof-blood').value = profile.BLOOD_GROUP || 'Unknown';
+      document.getElementById('prof-allergies').value = profile.ALLERGIES || '';
+      document.getElementById('prof-issue').value = profile.ISSUE || '';
+      document.getElementById('prof-history').value = profile.MEDICAL_HISTORY || '';
+      document.getElementById('prof-bed-info').innerHTML = `<i class="fa-solid fa-bed" aria-hidden="true"></i> Bed: ${profile.BED_NUMBER ? `${escapeHtml(profile.BED_NUMBER)} (${escapeHtml(profile.WARD_TYPE)})` : 'Not currently admitted'}`;
+      document.getElementById('prof-bill-info').textContent = `Bill No: ${profile.BILL_NO || 'N/A'}`;
+    }
+
+    const purchasesResponse = await fetch('/api/pharmacy/purchases');
+    const purchases = await purchasesResponse.json();
+    document.getElementById('profile-purchases-tbody').innerHTML = purchases.map((p) => `
+      <tr>
+        <td><code>${escapeHtml(p.PURCHASE_ID)}</code></td>
+        <td>${escapeHtml(p.MEDICINE_NAME)}</td>
+        <td>${p.QUANTITY}</td>
+        <td>₹${Number(p.TOTAL_PRICE).toFixed(2)}</td>
+        <td>${escapeHtml(p.PURCHASE_DATE)}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="text-muted">No purchases yet.</td></tr>';
+  } catch (err) {
+    notifyUser('Failed to load your profile', 'error');
+  }
+
+  document.getElementById('pref-marketing').checked = Boolean(activeUser && activeUser.marketing_opt_in);
+  loadMyPrivacyRequests();
+}
+
+async function handleUpdateProfile(event) {
+  event.preventDefault();
+  const ageValue = document.getElementById('prof-age').value;
+  const payload = {
+    NAME: document.getElementById('prof-name').value.trim(),
+    MOBILE_NO: document.getElementById('prof-mobile').value.trim(),
+    AGE: ageValue === '' ? null : parseInt(ageValue, 10),
+    GENDER: document.getElementById('prof-gender').value,
+    BLOOD_GROUP: document.getElementById('prof-blood').value,
+    ALLERGIES: document.getElementById('prof-allergies').value.trim(),
+    ISSUE: document.getElementById('prof-issue').value.trim(),
+    MEDICAL_HISTORY: document.getElementById('prof-history').value.trim()
+  };
+  const response = await fetch('/api/patient/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json();
+  notifyUser(response.ok ? data.message : data.error, response.ok ? 'success' : 'error');
+  if (response.ok) {
+    activeUser.name = payload.NAME;
+    document.getElementById('display-user-name').textContent = payload.NAME;
+  }
+}
+
+async function handleMarketingPreference(optIn) {
+  const response = await fetch('/api/account/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ marketing_opt_in: optIn })
+  });
+  const data = await response.json();
+  if (response.ok) {
+    activeUser.marketing_opt_in = data.marketing_opt_in;
+    notifyUser(data.message, 'success');
+  } else {
+    notifyUser(data.error || 'Could not save preference', 'error');
+  }
+}
+
+async function loadMyPrivacyRequests() {
+  const container = document.getElementById('my-privacy-requests');
+  if (!container) return;
+  const response = await fetch('/api/privacy/deletion-request');
+  const requests = response.ok ? await response.json() : [];
+  container.innerHTML = requests.map((r) => `
+    <p class="text-muted" style="font-size: 13px;">
+      Deletion request #${r.ID} (${escapeHtml(r.CREATED_AT)}): <strong>${escapeHtml(r.STATUS)}</strong>
+      ${r.RESOLUTION_NOTE ? ` &mdash; ${escapeHtml(r.RESOLUTION_NOTE)}` : ''}
+    </p>
+  `).join('');
+}
+
+async function handleDeletionRequest(event) {
+  event.preventDefault();
+  const response = await fetch('/api/privacy/deletion-request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      password: document.getElementById('delete-password').value,
+      reason: document.getElementById('delete-reason').value.trim()
+    })
+  });
+  const data = await response.json();
+  if (response.ok) {
+    notifyUser(data.message, 'success');
+    document.getElementById('delete-password').value = '';
+    closeModal('modal-delete-account');
+    loadMyPrivacyRequests();
+  } else {
+    notifyUser(data.error, 'error');
+  }
+}
+
+async function loadPrivacyRequests() {
+  const tbody = document.getElementById('privacy-requests-tbody');
+  try {
+    const response = await fetch('/api/privacy/requests');
+    const requests = await response.json();
+    tbody.innerHTML = requests.map((r) => `
+      <tr>
+        <td>${r.ID}</td>
+        <td>@${escapeHtml(r.USERNAME)}</td>
+        <td>${escapeHtml(r.CREATED_AT)}</td>
+        <td>${escapeHtml(r.REASON || '--')}</td>
+        <td><span class="status-pill status-${r.STATUS === 'Pending' ? 'scheduled' : r.STATUS === 'Completed' ? 'completed' : 'dispatched'}">${escapeHtml(r.STATUS)}</span></td>
+        <td>${escapeHtml(r.RESOLUTION_NOTE || '--')}${r.RESOLVED_BY ? `<br /><small class="text-muted">by @${escapeHtml(r.RESOLVED_BY)} on ${escapeHtml(r.RESOLVED_AT)}</small>` : ''}</td>
+        <td>
+          ${r.STATUS === 'Pending' ? `
+            <button class="btn btn-sm btn-primary" onclick="resolvePrivacyRequest(${r.ID}, 'complete')">Erase data</button>
+            <button class="btn btn-sm btn-outline" onclick="resolvePrivacyRequest(${r.ID}, 'reject')">Reject</button>
+          ` : '--'}
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="7" class="text-muted">No privacy requests.</td></tr>';
+  } catch (err) {
+    notifyUser('Failed to load privacy requests', 'error');
+  }
+}
+
+async function resolvePrivacyRequest(requestId, action) {
+  let body = {};
+  if (action === 'complete') {
+    if (!confirm('Erase this account and its non-clinical personal data? This cannot be undone.')) return;
+  } else {
+    const note = prompt('Reason for rejecting this request (shown to the requester):');
+    if (!note) return;
+    body = { note };
+  }
+  const response = await fetch(`/api/privacy/requests/${requestId}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  notifyUser(response.ok ? data.message : data.error, response.ok ? 'success' : 'error');
+  loadPrivacyRequests();
+}
+
+/* --------------------------------------------------------------------------
+   13. Cookie Consent
+   Only a strictly necessary session cookie is used today. Any future analytics or
+   marketing script must be loaded only when hasCookieConsent('analytics') is true.
+   -------------------------------------------------------------------------- */
+
+const COOKIE_CONSENT_KEY = 'pulsecare-cookie-consent';
+const COOKIE_CONSENT_VERSION = 1;
+
+function readCookieConsent() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(COOKIE_CONSENT_KEY));
+    return stored && stored.version === COOKIE_CONSENT_VERSION ? stored : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function hasCookieConsent(category) {
+  if (category === 'necessary') return true;
+  const consent = readCookieConsent();
+  return Boolean(consent && consent[category]);
+}
+
+function initCookieConsent() {
+  if (!readCookieConsent()) {
+    document.getElementById('cookie-banner').classList.remove('hidden');
+  }
+}
+
+function toggleCookiePrefs() {
+  const prefs = document.getElementById('cookie-prefs');
+  const opening = prefs.classList.contains('hidden');
+  prefs.classList.toggle('hidden', !opening);
+  const manageBtn = document.getElementById('cookie-manage-btn');
+  manageBtn.textContent = opening ? 'Save preferences' : 'Manage preferences';
+  manageBtn.onclick = opening ? () => saveCookieConsent(document.getElementById('cookie-pref-analytics').checked) : toggleCookiePrefs;
+}
+
+function saveCookieConsent(allowAnalytics) {
+  try {
+    localStorage.setItem(COOKIE_CONSENT_KEY, JSON.stringify({
+      version: COOKIE_CONSENT_VERSION,
+      necessary: true,
+      analytics: Boolean(allowAnalytics),
+      decided_at: new Date().toISOString()
+    }));
+  } catch (err) {
+    // Storage blocked: the banner will simply be shown again next visit.
+  }
+  document.getElementById('cookie-banner').classList.add('hidden');
+  notifyUser('Cookie preferences saved.', 'success');
+}
+
+function openCookieSettings() {
+  const consent = readCookieConsent();
+  document.getElementById('cookie-pref-analytics').checked = Boolean(consent && consent.analytics);
+  document.getElementById('cookie-banner').classList.remove('hidden');
+  const prefs = document.getElementById('cookie-prefs');
+  if (prefs.classList.contains('hidden')) toggleCookiePrefs();
+  document.getElementById('cookie-pref-analytics').focus();
 }

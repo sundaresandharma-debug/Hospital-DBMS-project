@@ -16,7 +16,35 @@ def get_db():
     return conn
 
 
-def init_db():
+# Columns added after the original schema shipped. CREATE TABLE IF NOT EXISTS
+# does not alter existing tables, so these are applied with ALTER TABLE.
+MIGRATION_COLUMNS = {
+    "USER_DATA": [
+        ("TERMS_ACCEPTED_AT", "TIMESTAMP"),
+        ("POLICY_VERSION", "TEXT"),
+        ("HEALTH_DATA_CONSENT_AT", "TIMESTAMP"),
+        ("MARKETING_OPT_IN", "INTEGER DEFAULT 0"),
+        ("IS_MINOR", "INTEGER DEFAULT 0"),
+        ("GUARDIAN_NAME", "TEXT"),
+        ("GUARDIAN_CONSENT_AT", "TIMESTAMP"),
+    ],
+    "PATIENTS": [
+        ("GUARDIAN_NAME", "TEXT"),
+    ],
+}
+
+
+def apply_migrations(conn):
+    cursor = conn.cursor()
+    for table, columns in MIGRATION_COLUMNS.items():
+        existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})")}
+        for column, definition in columns:
+            if column not in existing:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    conn.commit()
+
+
+def init_db(demo_mode=True):
     conn = get_db()
     cursor = conn.cursor()
 
@@ -193,12 +221,53 @@ def init_db():
     """
     )
 
+    # 11. Privacy / data subject requests (account & data deletion)
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS DATA_REQUESTS (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            USERNAME TEXT NOT NULL,
+            REQUEST_TYPE TEXT NOT NULL DEFAULT 'deletion' CHECK (REQUEST_TYPE IN ('deletion')),
+            STATUS TEXT NOT NULL DEFAULT 'Pending' CHECK (STATUS IN ('Pending', 'Completed', 'Rejected')),
+            REASON TEXT,
+            RESOLUTION_NOTE TEXT,
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            RESOLVED_AT TIMESTAMP,
+            RESOLVED_BY TEXT
+        )
+    """
+    )
+
     conn.commit()
-    seed_data(conn)
+    apply_migrations(conn)
+    if demo_mode:
+        seed_data(conn)
+    else:
+        seed_bed_layout(conn)
     conn.close()
 
 
+def seed_bed_layout(conn):
+    """Production setup: the 70-bed ward layout only, every bed available and no sample people."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM BEDS")
+    if cursor.fetchone()[0] > 0:
+        return
+    wards = [("ICU", "ICU Ward", 10), ("EMG", "Emergency Care", 15), ("GEN", "General Ward", 30), ("DLX", "Deluxe Suite", 15)]
+    bed_records = []
+    for prefix, ward, count in wards:
+        for i in range(1, count + 1):
+            bed_num = f"Suite {100 + i}" if prefix == "DLX" else f"Bed {i:02d}"
+            bed_records.append((f"{prefix}-{i:02d}", ward, bed_num, "Available", None, None))
+    cursor.executemany(
+        "INSERT INTO BEDS (BED_ID, WARD_TYPE, BED_NUMBER, STATUS, PATIENT_ID, ASSIGNED_DATE) VALUES (?, ?, ?, ?, ?, ?)",
+        bed_records,
+    )
+    conn.commit()
+
+
 def seed_data(conn):
+    """Demo mode only: fictional sample accounts, patients and records."""
     cursor = conn.cursor()
 
     # Seed Default User Accounts
@@ -450,7 +519,7 @@ def seed_data(conn):
             [
                 ("bed", "Patient Johnathan Doe allocated to Bed ICU-01 (Intensive Care)."),
                 ("bed", "Patient Pooja Hegde allocated to Bed ICU-04 (Trauma Care)."),
-                ("pharmacy", "System: 70 Ward beds and Pharmacy inventory operational."),
+                ("pharmacy", "System: Ward beds and pharmacy inventory loaded."),
             ],
         )
 
