@@ -15,9 +15,6 @@ def env_flag(name, default):
     return os.environ.get(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
-# DEMO_MODE seeds fictional sample data, shows demo logins and enables the reset button.
-# It must be turned off (DEMO_MODE=0) before real patients use the portal.
-DEMO_MODE = env_flag("DEMO_MODE", "1")
 # Staff accounts can only be self-registered with this code; empty disables staff sign-up.
 STAFF_INVITE_CODE = os.environ.get("STAFF_INVITE_CODE", "")
 # Version of the Terms / Privacy Policy users accept at sign-up (bump when the documents change).
@@ -26,20 +23,6 @@ POLICY_VERSION = "2026-10-16"
 CONSULTATION_FEE = float(os.environ.get("CONSULTATION_FEE", "800"))
 ADULT_AGE = 18
 
-# Legal entity details displayed in the footer, legal pages and printed slips.
-# Placeholders in [brackets] must be replaced with the operator's real details before launch.
-BUSINESS = {
-    "name": os.environ.get("BUSINESS_NAME", "[Registered legal entity name]"),
-    "trading_name": os.environ.get("BUSINESS_TRADING_NAME", "PulseCare+"),
-    "address": os.environ.get("BUSINESS_ADDRESS", "[Registered office address]"),
-    "registration": os.environ.get("BUSINESS_REGISTRATION", "[Company / hospital registration number]"),
-    "tax_id": os.environ.get("BUSINESS_TAX_ID", "[GSTIN / tax ID]"),
-    "email": os.environ.get("BUSINESS_EMAIL", "[support email]"),
-    "privacy_email": os.environ.get("BUSINESS_PRIVACY_EMAIL", "[privacy / grievance officer email]"),
-    "grievance_officer": os.environ.get("BUSINESS_GRIEVANCE_OFFICER", "[Grievance / data protection officer name]"),
-    "phone": os.environ.get("BUSINESS_PHONE", "[contact phone]"),
-}
-
 app = Flask(__name__, static_folder="static")
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "hnm-hospital-vibrant-secret-key-2026")
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -47,9 +30,9 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("VERCEL")) or env_flag("SESSION_COOKIE_SECURE", "0")
 
 
-# Initialize database schema (and demo data only in demo mode) on startup
+# Initialize database schema and demo data on startup
 with app.app_context():
-    init_db(demo_mode=DEMO_MODE)
+    init_db()
 
 
 # Only same-origin resources are allowed: fonts and icons are self-hosted under
@@ -134,13 +117,11 @@ def static_proxy(path):
     return send_from_directory("static", "index.html")
 
 
-# ================= PUBLIC SITE INFO (BUSINESS DETAILS & FLAGS) =================
+# ================= PUBLIC SITE INFO =================
 
 @app.route("/api/site-info", methods=["GET"])
 def site_info():
     return jsonify({
-        "business": BUSINESS,
-        "demo_mode": DEMO_MODE,
         "staff_signup_enabled": bool(STAFF_INVITE_CODE),
         "consultation_fee": CONSULTATION_FEE,
         "policy_version": POLICY_VERSION,
@@ -1209,8 +1190,6 @@ def get_notifications():
 @app.route("/api/admin/reset", methods=["POST"])
 @staff_required
 def reset_database():
-    if not DEMO_MODE:
-        return jsonify({"error": "Database reset is only available in demo mode."}), 403
     conn = get_db()
     cursor = conn.cursor()
     tables = [
@@ -1232,8 +1211,8 @@ def reset_database():
         cursor.execute(f"DROP TABLE IF EXISTS {t}")
     conn.commit()
     conn.close()
-    init_db(demo_mode=DEMO_MODE)
-    return jsonify({"message": "Database reset and seeded with fictional demo data."})
+    init_db()
+    return jsonify({"message": "Database reset and seeded with demo data."})
 
 
 # ================= PRIVACY: DATA EXPORT, DELETION REQUESTS & PREFERENCES =================
@@ -1260,7 +1239,6 @@ def export_my_data():
 
     export = {
         "exported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "controller": BUSINESS["name"],
         "account": dict(account) if account else None,
         "patient_records": rows(f"SELECT * FROM PATIENTS WHERE PID IN ({placeholders})", pids) if pids else [],
         "consultations": rows(f"SELECT * FROM CONSULTATION WHERE PATIENT_ID IN ({placeholders})", pids) if pids else [],

@@ -5,15 +5,12 @@ The legal pages describe the software's actual behaviour, but they are templates
 
 ## Before launch (operator actions)
 
-1. Set the business details as environment variables (shown in the footer, legal pages and printed prescriptions):
-   `BUSINESS_NAME`, `BUSINESS_TRADING_NAME`, `BUSINESS_ADDRESS`, `BUSINESS_REGISTRATION`, `BUSINESS_TAX_ID`,
-   `BUSINESS_EMAIL`, `BUSINESS_PRIVACY_EMAIL`, `BUSINESS_GRIEVANCE_OFFICER`, `BUSINESS_PHONE`.
-2. Set `DEMO_MODE=0`. This stops seeding fictional patients and demo accounts (`admin` / `admin123` etc.), hides the demo logins, the demo banner and the "Reset Demo Data" button, and disables `/api/admin/reset`.
-3. Set a strong random `SECRET_KEY` (the code default is public).
-4. Set `STAFF_INVITE_CODE` to let staff self-register; leave it empty to disable staff sign-up entirely.
-5. Set `CONSULTATION_FEE` to the real fee (default 800 INR).
-6. Fill in every `[bracketed]` item in `static/legal/*.html` (retention periods, refund windows, payment method, governing law, hosting provider) and get legal sign-off. Bump `POLICY_VERSION` in `app.py` whenever the Terms or Privacy Policy change.
-7. Note: on Vercel the SQLite file lives in `/tmp` and is lost between cold starts. Use a persistent, encrypted database before storing real patient data.
+1. The app seeds sample patients and demo accounts (`admin` / `admin123` etc.) and shows demo logins and a "Reset Demo Data" button. Remove these before real patients use it.
+2. Set a strong random `SECRET_KEY` (the code default is public).
+3. Set `STAFF_INVITE_CODE` to let staff self-register; leave it empty to disable staff sign-up entirely.
+4. Set `CONSULTATION_FEE` to the real fee (default 800 INR).
+5. Fill in every `[bracketed]` item in `static/legal/*.html` (retention periods, refund windows, payment method, governing law, hosting provider) and get legal sign-off. Bump `POLICY_VERSION` in `app.py` whenever the Terms or Privacy Policy change.
+6. Note: on Vercel the SQLite file lives in `/tmp` and is lost between cold starts. Use a persistent, encrypted database before storing real patient data.
 
 ## Checklist
 
@@ -26,9 +23,9 @@ The legal pages describe the software's actual behaviour, but they are templates
 | **Data minimization** | Sign-up no longer invents age (30) and gender for new patients. Patients no longer receive other patients' names, ages, conditions or contact numbers from `/api/beds`, nor doctors' salaries and personal phone numbers from `/api/employees`. Patients can no longer open other patients' prescriptions or consultations by ID. No email, ID number, card details or location are collected. |
 | **Audit third-party SDKs** | See `THIRD_PARTY_NOTICES.md`. Google Fonts and the cdnjs Font Awesome CDN were removed and self-hosted under `static/vendor/`, so the site makes **zero third-party requests**. A Content-Security-Policy (`default-src 'self'`) enforces this. Unused `python-dotenv` removed from `requirement.txt`. |
 | **Remove dark patterns & hidden fees** | Patients can no longer type their own consultation fee; the published fee is shown before booking and enforced server-side. Medicine checkout states the total is the full amount. Bed reservation states that no charge is made. Opt-ins are never pre-ticked. Cookie choices have equal prominence. Deletion is self-service (no "email us to cancel"). |
-| **Remove fake reviews & unsupported claims** | No reviews/testimonials exist. Removed: fake hotline and website on prescriptions, "Digitally verified & validated medical record", "Sanitized", "24/7 Emergency EMT", "Real-time", "Advanced", and hard-coded counts ("20 patients", "10 doctors", "70 beds") that become false as data changes. A demo banner marks sample data as fictional. |
+| **Remove fake reviews & unsupported claims** | No reviews/testimonials exist. Removed: fake hotline and website on prescriptions, "Digitally verified & validated medical record", "Sanitized", "24/7 Emergency EMT", "Real-time", "Advanced", and hard-coded counts ("20 patients", "10 doctors", "70 beds") that become false as data changes. |
 | **Accessibility: alt text & colour contrast** | The app has no `<img>` content; all 86 decorative icons are `aria-hidden`, and icon-only buttons (sign out, close, show password, delete, remove row) have `aria-label`s. Low-contrast colours were fixed (muted text, primary/gradient buttons, toasts, danger hover) to reach ≥ 4.5:1. Verified with axe-core (WCAG 2.0/2.1 A + AA): 0 violations across login, sign-up, patient and all staff views, and the legal pages. |
-| **Keyboard navigation & business details** | Skip link; visible `:focus-visible` outline; ward bed map rebuilt as `<button>`s with descriptive labels (tooltips also show on focus); ARIA tabs with arrow-key support; dialogs have `role="dialog"`, move focus in, trap Tab, close on Escape and restore focus; every form field has a `<label for>`; toasts announced via `aria-live`. Business name, address, registration, tax ID and contact appear in the footer, legal pages and prescription slips (configured via env vars). Accessibility statement at `/accessibility`. |
+| **Keyboard navigation** | Skip link; visible `:focus-visible` outline; ward bed map rebuilt as `<button>`s with descriptive labels (tooltips also show on focus); ARIA tabs with arrow-key support; dialogs have `role="dialog"`, move focus in, trap Tab, close on Escape and restore focus; every form field has a `<label for>`; toasts announced via `aria-live`. Accessibility statement at `/accessibility`. |
 | **Age consent for kids' data** | Sign-up asks whether the person is 18+; under-18 accounts require a parent/guardian name and an explicit guardian consent checkbox (stored with timestamp). Staff cannot register as minors. Staff registering a patient under 18 must record a guardian. Enforced server-side. |
 | **Unsubscribe link in emails** | The portal sends no email today. `email_utils.py` provides the only sanctioned builders: marketing messages always include a signed unsubscribe link plus `List-Unsubscribe` and `List-Unsubscribe-Post` (RFC 8058 one-click) headers. `/unsubscribe` handles both the link (with confirm step) and one-click POST. Users can also toggle updates in their profile. |
 | **Licensed fonts and images** | Plus Jakarta Sans and Outfit (SIL OFL 1.1) and Font Awesome Free (icons CC BY 4.0, fonts OFL 1.1, code MIT) are vendored with their licence files in `static/vendor/licenses/`. No photos or other images are used. |

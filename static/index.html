@@ -14,10 +14,6 @@
 <body>
   <a href="#" class="skip-link" onclick="skipToMain(event)">Skip to main content</a>
 
-  <div id="demo-banner" class="demo-banner hidden" role="note">
-    Demo environment: all names and records shown are fictional sample data. Do not enter real patient information.
-  </div>
-
   <!-- AUTHENTICATION VIEW -->
   <main id="auth-screen" class="auth-wrapper" tabindex="-1">
     <div class="auth-brand-glow" aria-hidden="true"></div>
@@ -56,8 +52,8 @@
         <button type="submit" class="btn btn-primary btn-block">
           <span>Log In to Portal</span> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
         </button>
-        <div class="quick-demo-accounts demo-only hidden">
-          <p>Demo logins (fictional sample accounts):</p>
+        <div class="quick-demo-accounts">
+          <p>Quick Demo Logins:</p>
           <div class="demo-chips">
             <button type="button" onclick="fillDemo('admin', 'admin123')"><i class="fa-solid fa-user-doctor" aria-hidden="true"></i> Staff (Admin)</button>
             <button type="button" onclick="fillDemo('patient_john', 'patient123')"><i class="fa-solid fa-hospital-user" aria-hidden="true"></i> Patient</button>
@@ -166,7 +162,7 @@
       </form>
     </div>
 
-    <footer class="site-footer auth-footer" aria-label="Legal and business information">
+    <footer class="site-footer auth-footer" aria-label="Legal information">
       <nav aria-label="Legal">
         <a href="/privacy">Privacy Policy</a>
         <a href="/terms">Terms of Service</a>
@@ -175,7 +171,7 @@
         <a href="/accessibility">Accessibility</a>
         <button type="button" class="link-button" onclick="openCookieSettings()">Cookie settings</button>
       </nav>
-      <div class="business-details"></div>
+      <p>In a medical emergency, call your local emergency number. This portal is not an emergency service.</p>
     </footer>
   </main>
 
@@ -246,7 +242,7 @@
           <p id="page-subtitle">Real-time clinical metrics & status</p>
         </div>
         <div class="top-actions">
-          <button class="btn btn-outline staff-only demo-only hidden" onclick="resetDatabasePrompt()">
+          <button class="btn btn-outline staff-only" onclick="resetDatabasePrompt()">
             <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset Demo Data
           </button>
           <!-- Top-Right Action Button: ONLY visible on Dashboard and Consultations -->
@@ -714,7 +710,7 @@
         </section>
       </div>
 
-      <footer class="site-footer" aria-label="Legal and business information">
+      <footer class="site-footer" aria-label="Legal information">
         <nav aria-label="Legal">
           <a href="/privacy">Privacy Policy</a>
           <a href="/terms">Terms of Service</a>
@@ -723,7 +719,7 @@
           <a href="/accessibility">Accessibility</a>
           <button type="button" class="link-button" onclick="openCookieSettings()">Cookie settings</button>
         </nav>
-        <div class="business-details"></div>
+        <p>In a medical emergency, call your local emergency number. This portal is not an emergency service.</p>
       </footer>
     </main>
   </div>

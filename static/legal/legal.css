@@ -51,19 +51,13 @@ body {
   outline-offset: 2px;
 }
 
-.legal-header, .legal-footer {
+.legal-header {
   border-bottom: 1px solid var(--border);
   padding: 14px 16px;
 }
 
-.legal-footer {
-  border-bottom: none;
-  border-top: 1px solid var(--border);
-  font-size: 14px;
-  color: var(--muted);
-}
 
-.legal-header nav, .legal-footer nav {
+.legal-header nav {
   max-width: 820px;
   margin: 0 auto;
   display: flex;
@@ -71,7 +65,6 @@ body {
   gap: 6px 18px;
 }
 
-.legal-footer .business-details { max-width: 820px; margin: 8px auto 0; }
 
 a { color: var(--link); }
 
