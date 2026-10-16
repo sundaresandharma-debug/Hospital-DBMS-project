@@ -12,7 +12,7 @@ social or error-tracking SDKs.
 |---|---|
 | Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) | Sent every visitor's IP address to Google without consent. Replaced by self-hosted copies. |
 | cdnjs Font Awesome 6.5.0 (`cdnjs.cloudflare.com`) | Same issue (IP disclosure to a third-party CDN). Replaced by a self-hosted copy of only the solid icon set. |
-| `python-dotenv` (Python package) | Listed in `requirement.txt` but never imported. |
+| `python-dotenv` (Python package) | Listed in `requirements.txt` but never imported. |
 
 ## Bundled assets (`static/vendor/`)
 
@@ -24,7 +24,7 @@ social or error-tracking SDKs.
 
 The Font Awesome attribution comment at the top of each CSS file must be kept, as its licence requires.
 
-## Python dependencies (`requirement.txt`)
+## Python dependencies (`requirements.txt`)
 
 | Package | Licence | Notes |
 |---|---|---|
