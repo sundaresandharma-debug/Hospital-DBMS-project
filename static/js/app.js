@@ -1,5 +1,5 @@
 /* ==========================================================================
-   PulseCare+ Hospital Management System - Complete Client Application Logic
+   Asclepio Hospital Management System - Complete Client Application Logic
    ========================================================================== */
 
 let activeUser = null;
@@ -999,7 +999,7 @@ async function openPrescriptionSlip(prescriptionId) {
       <div class="prescription-slip">
         <div class="slip-header">
           <div>
-            <div class="slip-hospital-title">PulseCare+</div>
+            <div class="slip-hospital-title">Asclepio</div>
           </div>
           <div style="text-align: right;">
             <span style="font-size: 18px; font-weight: 800; color: #0284c7;">℞ PRESCRIPTION</span>
@@ -1050,7 +1050,7 @@ async function openPrescriptionSlip(prescriptionId) {
         </table>
 
         <div class="slip-footer">
-          <p style="font-size: 11px; color: #475569;">Generated electronically from the PulseCare+ records system. Not valid without the prescribing doctor's signature.</p>
+          <p style="font-size: 11px; color: #475569;">Generated electronically from the Asclepio records system. Not valid without the prescribing doctor's signature.</p>
           <div class="slip-sign-line">
             Dr. ${escapeHtml(rx.DOCTOR_NAME)}<br>
             <span style="font-size: 10px; font-weight: normal;">Authorized Medical Officer</span>
@@ -1469,7 +1469,7 @@ async function resolvePrivacyRequest(requestId, action) {
    marketing script must be loaded only when hasCookieConsent('analytics') is true.
    -------------------------------------------------------------------------- */
 
-const COOKIE_CONSENT_KEY = 'pulsecare-cookie-consent';
+const COOKIE_CONSENT_KEY = 'asclepio-cookie-consent';
 const COOKIE_CONSENT_VERSION = 1;
 
 function readCookieConsent() {

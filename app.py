@@ -1258,7 +1258,7 @@ def export_my_data():
     return Response(
         json.dumps(export, indent=2, default=str),
         mimetype="application/json",
-        headers={"Content-Disposition": f"attachment; filename=pulsecare-data-{session['user']}.json"},
+        headers={"Content-Disposition": f"attachment; filename=asclepio-data-{session['user']}.json"},
     )
 
 
@@ -1403,9 +1403,9 @@ def update_preferences():
 
 def _simple_page(title, body_html):
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{html.escape(title)} | PulseCare+</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{html.escape(title)} | Asclepio</title>
 <link rel="stylesheet" href="/legal/legal.css"></head><body><main class="legal-main" id="main">
-<h1>{html.escape(title)}</h1>{body_html}<p><a href="/">Return to PulseCare+</a></p></main></body></html>"""
+<h1>{html.escape(title)}</h1>{body_html}<p><a href="/">Return to Asclepio</a></p></main></body></html>"""
 
 
 @app.route("/unsubscribe", methods=["GET", "POST"])

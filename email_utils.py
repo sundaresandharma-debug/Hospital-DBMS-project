@@ -11,7 +11,7 @@ from email.message import EmailMessage
 
 from itsdangerous import BadSignature, URLSafeSerializer
 
-UNSUBSCRIBE_SALT = "pulsecare-unsubscribe"
+UNSUBSCRIBE_SALT = "asclepio-unsubscribe"
 
 
 def _serializer(secret_key):
@@ -46,7 +46,7 @@ def build_marketing_email(*, sender, recipient, subject, body, username, base_ur
     msg.set_content(
         f"{body}\n\n"
         "--\n"
-        "You are receiving this because you opted in to updates from PulseCare+.\n"
+        "You are receiving this because you opted in to updates from Asclepio.\n"
         f"Unsubscribe at any time: {link}\n"
     )
     return msg
@@ -58,5 +58,5 @@ def build_transactional_email(*, sender, recipient, subject, body):
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-    msg.set_content(f"{body}\n\n--\nPulseCare+\n")
+    msg.set_content(f"{body}\n\n--\nAsclepio\n")
     return msg
