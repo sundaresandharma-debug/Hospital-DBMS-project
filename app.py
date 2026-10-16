@@ -1404,6 +1404,7 @@ def update_preferences():
 def _simple_page(title, body_html):
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{html.escape(title)} | Asclepio</title>
+<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/legal/legal.css"></head><body><main class="legal-main" id="main">
 <h1>{html.escape(title)}</h1>{body_html}<p><a href="/">Return to Asclepio</a></p></main></body></html>"""
 
