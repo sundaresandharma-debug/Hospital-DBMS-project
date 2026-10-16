@@ -34,7 +34,7 @@ def unsubscribe_url(base_url, secret_key, username):
     return f"{base_url.rstrip('/')}/unsubscribe?token={make_unsubscribe_token(secret_key, username)}"
 
 
-def build_marketing_email(*, sender, recipient, subject, body, username, base_url, secret_key, business):
+def build_marketing_email(*, sender, recipient, subject, body, username, base_url, secret_key):
     """Build an opt-in message. Callers must only send it when USER_DATA.MARKETING_OPT_IN = 1."""
     link = unsubscribe_url(base_url, secret_key, username)
     msg = EmailMessage()
@@ -46,18 +46,17 @@ def build_marketing_email(*, sender, recipient, subject, body, username, base_ur
     msg.set_content(
         f"{body}\n\n"
         "--\n"
-        f"You are receiving this because you opted in to updates from {business['name']}.\n"
+        "You are receiving this because you opted in to updates from PulseCare+.\n"
         f"Unsubscribe at any time: {link}\n"
-        f"{business['name']}, {business['address']}\n"
     )
     return msg
 
 
-def build_transactional_email(*, sender, recipient, subject, body, business):
+def build_transactional_email(*, sender, recipient, subject, body):
     """Service messages the user needs (no opt-in required), still identifying the sender."""
     msg = EmailMessage()
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-    msg.set_content(f"{body}\n\n--\n{business['name']}, {business['address']}\nContact: {business['email']}\n")
+    msg.set_content(f"{body}\n\n--\nPulseCare+\n")
     return msg

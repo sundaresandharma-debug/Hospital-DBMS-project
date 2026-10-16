@@ -1330,16 +1330,6 @@ body {
   }
 }
 
-/* Demo environment notice */
-.demo-banner {
-  background: #78350f;
-  color: #fef3c7;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 16px;
-}
-
 /* Consent checkboxes in forms */
 .consent-group {
   display: flex;
@@ -1402,7 +1392,7 @@ body {
   font-size: 18px;
 }
 
-/* Footer with business details & legal links */
+/* Footer with legal links */
 .site-footer {
   margin-top: 24px;
   padding: 16px 0 8px;

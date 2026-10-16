@@ -6,7 +6,7 @@ let activeUser = null;
 let activeView = 'dashboard';
 let hospitalBedsCache = [];
 let pharmacyInventoryCache = [];
-let siteInfo = { business: {}, demo_mode: false, staff_signup_enabled: false, consultation_fee: 0 };
+let siteInfo = { staff_signup_enabled: false, consultation_fee: 0 };
 
 // Initialize app when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', async () => {
@@ -71,7 +71,7 @@ function skipToMain(event) {
 }
 
 /* --------------------------------------------------------------------------
-   Business details, demo mode & sign-up consent
+   Site settings & sign-up consent
    -------------------------------------------------------------------------- */
 
 async function loadSiteInfo() {
@@ -81,17 +81,6 @@ async function loadSiteInfo() {
   } catch (err) {
     console.error('Error loading site info:', err);
   }
-
-  const biz = siteInfo.business || {};
-  const detailsHtml = `
-    <p><strong>${escapeHtml(biz.trading_name)}</strong> is operated by ${escapeHtml(biz.name)}, ${escapeHtml(biz.address)}.</p>
-    <p>Registration: ${escapeHtml(biz.registration)} &middot; Tax ID: ${escapeHtml(biz.tax_id)} &middot; Contact: ${escapeHtml(biz.email)} &middot; ${escapeHtml(biz.phone)}</p>
-    <p>In a medical emergency, call your local emergency number. This portal is not an emergency service.</p>
-  `;
-  document.querySelectorAll('.business-details').forEach((el) => { el.innerHTML = detailsHtml; });
-
-  document.getElementById('demo-banner').classList.toggle('hidden', !siteInfo.demo_mode);
-  document.querySelectorAll('.quick-demo-accounts').forEach((el) => el.classList.toggle('hidden', !siteInfo.demo_mode));
 
   const staffRadio = document.querySelector('input[name="signup-role"][value="staff"]');
   if (staffRadio && !siteInfo.staff_signup_enabled) {
@@ -246,11 +235,6 @@ function applyRolePermissions() {
   });
   document.querySelectorAll('.patient-only').forEach((elem) => {
     elem.classList.toggle('hidden', isStaff);
-  });
-  // Demo-only controls (sample logins, reset button) stay hidden on a live deployment
-  document.querySelectorAll('.demo-only').forEach((elem) => {
-    if (!siteInfo.demo_mode) elem.classList.add('hidden');
-    else if (!elem.classList.contains('staff-only') || isStaff) elem.classList.remove('hidden');
   });
 }
 
@@ -1015,9 +999,7 @@ async function openPrescriptionSlip(prescriptionId) {
       <div class="prescription-slip">
         <div class="slip-header">
           <div>
-            <div class="slip-hospital-title">${escapeHtml(siteInfo.business.trading_name)}</div>
-            <p style="font-size: 12px; color: #475569;">${escapeHtml(siteInfo.business.name)}, ${escapeHtml(siteInfo.business.address)}</p>
-            <p style="font-size: 11px; color: #475569;">Reg. ${escapeHtml(siteInfo.business.registration)} | ${escapeHtml(siteInfo.business.phone)} | ${escapeHtml(siteInfo.business.email)}</p>
+            <div class="slip-hospital-title">PulseCare+</div>
           </div>
           <div style="text-align: right;">
             <span style="font-size: 18px; font-weight: 800; color: #0284c7;">℞ PRESCRIPTION</span>
@@ -1068,7 +1050,7 @@ async function openPrescriptionSlip(prescriptionId) {
         </table>
 
         <div class="slip-footer">
-          <p style="font-size: 11px; color: #475569;">Generated electronically from the ${escapeHtml(siteInfo.business.trading_name)} records system. Not valid without the prescribing doctor's signature.</p>
+          <p style="font-size: 11px; color: #475569;">Generated electronically from the PulseCare+ records system. Not valid without the prescribing doctor's signature.</p>
           <div class="slip-sign-line">
             Dr. ${escapeHtml(rx.DOCTOR_NAME)}<br>
             <span style="font-size: 10px; font-weight: normal;">Authorized Medical Officer</span>
@@ -1273,7 +1255,7 @@ async function populateBedAllocationSelectors() {
 }
 
 async function resetDatabasePrompt() {
-  if (confirm('Reset the database to the fictional demo data? All changes will be lost.')) {
+  if (confirm('Reset the database to the demo data? All changes will be lost.')) {
     const response = await fetch('/api/admin/reset', { method: 'POST' });
     const payload = await response.json();
     notifyUser(payload.message, 'success');

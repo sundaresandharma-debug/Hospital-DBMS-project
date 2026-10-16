@@ -44,7 +44,7 @@ def apply_migrations(conn):
     conn.commit()
 
 
-def init_db(demo_mode=True):
+def init_db():
     conn = get_db()
     cursor = conn.cursor()
 
@@ -240,34 +240,11 @@ def init_db(demo_mode=True):
 
     conn.commit()
     apply_migrations(conn)
-    if demo_mode:
-        seed_data(conn)
-    else:
-        seed_bed_layout(conn)
+    seed_data(conn)
     conn.close()
 
 
-def seed_bed_layout(conn):
-    """Production setup: the 70-bed ward layout only, every bed available and no sample people."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM BEDS")
-    if cursor.fetchone()[0] > 0:
-        return
-    wards = [("ICU", "ICU Ward", 10), ("EMG", "Emergency Care", 15), ("GEN", "General Ward", 30), ("DLX", "Deluxe Suite", 15)]
-    bed_records = []
-    for prefix, ward, count in wards:
-        for i in range(1, count + 1):
-            bed_num = f"Suite {100 + i}" if prefix == "DLX" else f"Bed {i:02d}"
-            bed_records.append((f"{prefix}-{i:02d}", ward, bed_num, "Available", None, None))
-    cursor.executemany(
-        "INSERT INTO BEDS (BED_ID, WARD_TYPE, BED_NUMBER, STATUS, PATIENT_ID, ASSIGNED_DATE) VALUES (?, ?, ?, ?, ?, ?)",
-        bed_records,
-    )
-    conn.commit()
-
-
 def seed_data(conn):
-    """Demo mode only: fictional sample accounts, patients and records."""
     cursor = conn.cursor()
 
     # Seed Default User Accounts
