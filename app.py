@@ -1,14 +1,22 @@
 import functools
+import hmac
 import html
 import json
 import os
 import sqlite3
-from datetime import datetime
-from flask import Flask, Response, jsonify, request, session, send_from_directory
+import tempfile
+import traceback
+from datetime import datetime, timedelta
+from flask import Flask, Response, jsonify, redirect, request, send_file, send_from_directory, session
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from db import get_db, init_db
-from email_utils import read_unsubscribe_token
+from db import DATABASE, get_db, init_db
+from email_utils import read_unsubscribe_token, send_password_reset_email, send_verification_email
+from security import (
+    ValidationError, clean_text, consume_token, create_token, is_rate_limited, parse_appointment_time,
+    parse_float, parse_int, validate_email, validate_mobile, validate_password, validate_username,
+)
 
 
 def env_flag(name, default):
@@ -18,13 +26,21 @@ def env_flag(name, default):
 # Staff accounts can only be self-registered with this code; empty disables staff sign-up.
 STAFF_INVITE_CODE = os.environ.get("STAFF_INVITE_CODE", "")
 # Version of the Terms / Privacy Policy users accept at sign-up (bump when the documents change).
-POLICY_VERSION = "2026-10-16"
+POLICY_VERSION = "2026-10-17"
 # The single consultation fee shown to and charged to patients; no other fees are added.
 CONSULTATION_FEE = float(os.environ.get("CONSULTATION_FEE", "800"))
 ADULT_AGE = 18
+GENDERS = ("Male", "Female", "Other", "Not Specified")
+BLOOD_GROUPS = ("Unknown", "A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-")
 
 app = Flask(__name__, static_folder="static")
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "hnm-hospital-vibrant-secret-key-2026")
+# Secrets come only from environment variables, never from code sent to the browser.
+# The fallback is for local development; a deployment must set SECRET_KEY.
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "local-development-only-secret-key"
+if os.environ.get("VERCEL") and not os.environ.get("SECRET_KEY"):
+    print("WARNING: SECRET_KEY is not set. Sessions are signed with a public development key.", flush=True)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("VERCEL")) or env_flag("SESSION_COOKIE_SECURE", "0")
@@ -63,10 +79,8 @@ def set_security_headers(response):
 
 
 def current_patient_ids(cursor):
-    cursor.execute(
-        "SELECT PID FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)",
-        (session["user"], session["user"]),
-    )
+    """Row-level access: a patient account only ever sees patient records linked to its own username."""
+    cursor.execute("SELECT PID FROM PATIENTS WHERE USERNAME = ?", (session["user"],))
     return {row["PID"] for row in cursor.fetchall()}
 
 
@@ -112,9 +126,51 @@ def legal_page(page):
 
 @app.route("/<path:path>")
 def static_proxy(path):
-    if os.path.exists(os.path.join("static", path)):
+    if os.path.isfile(os.path.join("static", path)):
         return send_from_directory("static", path)
-    return send_from_directory("static", "index.html")
+    return not_found(None)
+
+
+# ================= ERROR HANDLING & TRACKING =================
+
+def log_error(source, message, detail=None, path=None):
+    """Store an error for the staff System page and print it to the server log (visible in Vercel Logs)."""
+    print(f"[{source} error] {path or ''} {message}\n{detail or ''}", flush=True)
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO ERROR_LOG (SOURCE, MESSAGE, DETAIL, PATH) VALUES (?, ?, ?, ?)",
+            (source, str(message)[:500], (detail or "")[:4000], (path or "")[:300]),
+        )
+        conn.execute("DELETE FROM ERROR_LOG WHERE ID NOT IN (SELECT ID FROM ERROR_LOG ORDER BY ID DESC LIMIT 500)")
+        conn.commit()
+        conn.close()
+    except sqlite3.Error:
+        pass
+
+
+@app.errorhandler(ValidationError)
+def handle_validation_error(exc):
+    return jsonify({"error": str(exc)}), 400
+
+
+@app.errorhandler(404)
+def not_found(_exc):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "That API address doesn't exist."}), 404
+    return send_from_directory("static", "404.html"), 404
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    if isinstance(exc, HTTPException):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": exc.description or exc.name}), exc.code
+        return exc
+    log_error("server", f"{type(exc).__name__}: {exc}", traceback.format_exc(), request.path)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Something went wrong on our side. Please try again in a moment."}), 500
+    return send_from_directory("static", "500.html"), 500
 
 
 # ================= PUBLIC SITE INFO =================
@@ -151,34 +207,64 @@ def public_stats():
     return jsonify(stats)
 
 
-# ================= AUTHENTICATION (EXPLICIT ERROR PROMPTS) =================
+# ================= AUTHENTICATION =================
+
+VERIFY_LINK_LIFETIME = timedelta(hours=24)
+RESET_LINK_LIFETIME = timedelta(hours=1)
+MAX_FAILED_LOGINS = 5
+LOCKOUT_MINUTES = 15
+
+
+def client_ip():
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    return forwarded.split(",")[0].strip() if forwarded else (request.remote_addr or "unknown")
+
+
+def too_many_requests(message="Too many attempts. Please wait a few minutes and try again."):
+    return jsonify({"error": message}), 429
+
+
+def public_base_url():
+    return (os.environ.get("APP_BASE_URL") or request.host_url).rstrip("/")
+
+
+def send_verification(cursor, username, email, name):
+    token = create_token(cursor, username, "verify_email", VERIFY_LINK_LIFETIME)
+    return send_verification_email(email, name, f"{public_base_url()}/api/auth/verify-email?token={token}")
+
+
+def start_session(username, role, name):
+    # A fresh session on every sign-in prevents session fixation; it expires after 8 hours.
+    session.clear()
+    session.permanent = True
+    session["user"] = username
+    session["role"] = role
+    session["name"] = name
+
 
 @app.route("/api/auth/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
-    username = (data.get("username") or "").strip().lower()
-    password = (data.get("password") or "").strip()
+    username = validate_username(data.get("username"))
+    password = validate_password(data.get("password"))
+    email = validate_email(data.get("email"))
     role = (data.get("role") or "patient").strip().lower()
-    name = (data.get("name") or "").strip()
-    mobile = (data.get("mobile_no") or "").strip()
+    name = clean_text(data.get("name"), "Full name", max_len=100)
+    mobile = validate_mobile(data.get("mobile_no"))
     accepted_terms = data.get("accept_terms") is True
     health_consent = data.get("health_data_consent") is True
     marketing_opt_in = 1 if data.get("marketing_opt_in") is True else 0
     age_group = data.get("age_group")
-    guardian_name = (data.get("guardian_name") or "").strip()
+    guardian_name = clean_text(data.get("guardian_name"), "Parent / guardian name", required=False, max_len=100)
     guardian_consent = data.get("guardian_consent") is True
 
-    if not username or len(username) < 3:
-        return jsonify({"error": "Username must be at least 3 characters long"}), 400
-    if not password or len(password) < 6:
-        return jsonify({"error": "Password must be at least 6 characters long"}), 400
     if role not in ["staff", "patient"]:
         return jsonify({"error": "Role must be either 'staff' or 'patient'"}), 400
     if role == "staff":
         if not STAFF_INVITE_CODE:
             return jsonify({"error": "Staff self-registration is disabled. Ask your hospital administrator for an account."}), 403
-        if (data.get("staff_invite_code") or "") != STAFF_INVITE_CODE:
-            return jsonify({"error": "Invalid staff invite code."}), 403
+        if not hmac.compare_digest(str(data.get("staff_invite_code") or ""), STAFF_INVITE_CODE):
+            return jsonify({"error": "That staff invite code isn't right. Check it with your administrator."}), 403
     if not accepted_terms:
         return jsonify({"error": "You must accept the Terms of Service and Privacy Policy to create an account."}), 400
     if age_group not in ("adult", "minor"):
@@ -193,23 +279,31 @@ def register():
 
     conn = get_db()
     cursor = conn.cursor()
+    if is_rate_limited(cursor, f"register:{client_ip()}", 10, 3600):
+        conn.commit()
+        conn.close()
+        return too_many_requests("Too many sign-ups from this network. Please try again later.")
 
-    # Check if account already exists
     cursor.execute("SELECT USERNAME FROM USER_DATA WHERE USERNAME = ?", (username,))
     if cursor.fetchone():
         conn.close()
-        return jsonify({"error": "Account already exists. Please login."}), 409
+        return jsonify({"error": "That username is taken. Choose another, or sign in if it's yours."}), 409
+    cursor.execute("SELECT USERNAME FROM USER_DATA WHERE EMAIL = ?", (email,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "An account already uses that email. Sign in, or use “Forgot password?” to get back in."}), 409
 
     hashed_pw = generate_password_hash(password)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_minor = 1 if age_group == "minor" else 0
+    display_name = name or username.capitalize()
     cursor.execute(
         """INSERT INTO USER_DATA (
-            USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO, TERMS_ACCEPTED_AT, POLICY_VERSION,
+            USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO, EMAIL, TERMS_ACCEPTED_AT, POLICY_VERSION,
             HEALTH_DATA_CONSENT_AT, MARKETING_OPT_IN, IS_MINOR, GUARDIAN_NAME, GUARDIAN_CONSENT_AT
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            username, hashed_pw, role, name or username.capitalize(), mobile, now, POLICY_VERSION,
+            username, hashed_pw, role, display_name, mobile, email, now, POLICY_VERSION,
             now if health_consent else None, marketing_opt_in, is_minor,
             guardian_name if is_minor else None, now if is_minor else None,
         ),
@@ -227,61 +321,75 @@ def register():
                 PID, NAME, ISSUE, AGE, GENDER, FEES, MOBILE_NO, BILL_NO, USERNAME,
                 BLOOD_GROUP, ALLERGIES, MEDICAL_HISTORY, GUARDIAN_NAME
             ) VALUES (?, ?, ?, NULL, NULL, 0, ?, ?, ?, 'Unknown', NULL, NULL, ?)""",
-            (pid, name or username.capitalize(), None, mobile, bill_no, username, guardian_name if is_minor else None),
+            (pid, display_name, None, mobile, bill_no, username, guardian_name if is_minor else None),
         )
 
+    sent = send_verification(cursor, username, email, display_name)
     conn.commit()
     conn.close()
 
-    session["user"] = username
-    session["role"] = role
-    session["name"] = name or username.capitalize()
-
+    start_session(username, role, display_name)
     return jsonify({
-        "message": f"Account successfully created as {role.upper()}!",
-        "user": {
-            "username": username,
-            "role": role,
-            "name": name or username.capitalize()
-        }
+        "message": f"Account created! We've sent a confirmation link to {email}." if sent
+                   else "Account created! Email isn't set up on this server yet, so your confirmation link was written to the server log.",
+        "user": {"username": username, "role": role, "name": display_name},
     }), 201
 
 
 @app.route("/api/auth/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
-    username = (data.get("username") or "").strip().lower()
-    password = (data.get("password") or "").strip()
+    identifier = (data.get("username") or "").strip().lower()
+    password = data.get("password") or ""
 
-    if not username or not password:
-        return jsonify({"error": "Please enter both username and password"}), 400
+    if not identifier or not password:
+        return jsonify({"error": "Please enter your username (or email) and password."}), 400
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO FROM USER_DATA WHERE USERNAME = ?", (username,))
+    if is_rate_limited(cursor, f"login:{client_ip()}", 20, 900):
+        conn.commit()
+        conn.close()
+        return too_many_requests("Too many sign-in attempts from this network. Please wait 15 minutes and try again.")
+
+    cursor.execute(
+        "SELECT USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO, FAILED_LOGINS, LOCKED_UNTIL FROM USER_DATA WHERE USERNAME = ? OR EMAIL = ?",
+        (identifier, identifier),
+    )
     row = cursor.fetchone()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if row and row["LOCKED_UNTIL"] and row["LOCKED_UNTIL"] > now:
+        conn.commit()
+        conn.close()
+        return too_many_requests("This account is temporarily locked after too many wrong passwords. Try again in 15 minutes, or reset your password.")
+
+    if not row or not check_password_hash(row["PASSWORD"], password):
+        if row:
+            failures = (row["FAILED_LOGINS"] or 0) + 1
+            locked = (datetime.now() + timedelta(minutes=LOCKOUT_MINUTES)).strftime("%Y-%m-%d %H:%M:%S") if failures >= MAX_FAILED_LOGINS else None
+            cursor.execute(
+                "UPDATE USER_DATA SET FAILED_LOGINS = ?, LOCKED_UNTIL = ? WHERE USERNAME = ?",
+                (0 if locked else failures, locked, row["USERNAME"]),
+            )
+        conn.commit()
+        conn.close()
+        # Same message either way, so the form can't be used to find out which usernames exist.
+        return jsonify({"error": "Incorrect username or password. Check them and try again, or use “Forgot password?”."}), 401
+
+    cursor.execute("UPDATE USER_DATA SET FAILED_LOGINS = 0, LOCKED_UNTIL = NULL WHERE USERNAME = ?", (row["USERNAME"],))
+    conn.commit()
     conn.close()
 
-    # Check if account does not exist
-    if not row:
-        return jsonify({"error": "Account does not exist. Please register."}), 404
-
-    # Check password match
-    if not check_password_hash(row["PASSWORD"], password):
-        return jsonify({"error": "Incorrect password. Please try again."}), 401
-
-    session["user"] = row["USERNAME"]
-    session["role"] = row["ROLE"]
-    session["name"] = row["NAME"] or row["USERNAME"]
-
+    start_session(row["USERNAME"], row["ROLE"], row["NAME"] or row["USERNAME"])
     return jsonify({
         "message": "Login successful",
         "user": {
             "username": row["USERNAME"],
             "role": row["ROLE"],
             "name": row["NAME"] or row["USERNAME"],
-            "mobile_no": row["MOBILE_NO"]
-        }
+            "mobile_no": row["MOBILE_NO"],
+        },
     })
 
 
@@ -292,12 +400,15 @@ def get_current_user():
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT USERNAME, ROLE, NAME, MOBILE_NO, MARKETING_OPT_IN FROM USER_DATA WHERE USERNAME = ?", (session["user"],))
+    cursor.execute(
+        "SELECT USERNAME, ROLE, NAME, MOBILE_NO, MARKETING_OPT_IN, EMAIL, EMAIL_VERIFIED_AT, ONBOARDED_AT FROM USER_DATA WHERE USERNAME = ?",
+        (session["user"],),
+    )
     user_row = cursor.fetchone()
 
     patient_profile = None
     if user_row and user_row["ROLE"] == "patient":
-        cursor.execute("SELECT * FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = ?", (user_row["USERNAME"], user_row["MOBILE_NO"]))
+        cursor.execute("SELECT * FROM PATIENTS WHERE USERNAME = ?", (user_row["USERNAME"],))
         p_row = cursor.fetchone()
         if p_row:
             patient_profile = dict(p_row)
@@ -315,9 +426,12 @@ def get_current_user():
             "role": user_row["ROLE"],
             "name": user_row["NAME"] or user_row["USERNAME"],
             "mobile_no": user_row["MOBILE_NO"],
+            "email": user_row["EMAIL"],
+            "email_verified": bool(user_row["EMAIL_VERIFIED_AT"]),
+            "onboarded": bool(user_row["ONBOARDED_AT"]),
             "marketing_opt_in": bool(user_row["MARKETING_OPT_IN"]),
-            "patient_profile": patient_profile
-        }
+            "patient_profile": patient_profile,
+        },
     })
 
 
@@ -325,6 +439,149 @@ def get_current_user():
 def logout():
     session.clear()
     return jsonify({"message": "Logged out successfully"})
+
+
+@app.route("/api/auth/verify-email", methods=["GET"])
+def verify_email():
+    """Target of the link in the confirmation email; redirects back to the app with the result."""
+    conn = get_db()
+    cursor = conn.cursor()
+    username = consume_token(cursor, request.args.get("token"), "verify_email")
+    if username:
+        cursor.execute("UPDATE USER_DATA SET EMAIL_VERIFIED_AT = CURRENT_TIMESTAMP WHERE USERNAME = ?", (username,))
+    conn.commit()
+    conn.close()
+    return redirect(f"/?verified={'1' if username else '0'}")
+
+
+@app.route("/api/auth/resend-verification", methods=["POST"])
+@login_required
+def resend_verification():
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_rate_limited(cursor, f"verify:{session['user']}", 3, 3600):
+        conn.commit()
+        conn.close()
+        return too_many_requests("We've already sent a few links. Please check your inbox (and spam folder) or try again in an hour.")
+    cursor.execute("SELECT EMAIL, NAME, EMAIL_VERIFIED_AT FROM USER_DATA WHERE USERNAME = ?", (session["user"],))
+    row = cursor.fetchone()
+    if not row or not row["EMAIL"]:
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "Add an email address to your account first."}), 400
+    if row["EMAIL_VERIFIED_AT"]:
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Your email is already confirmed."})
+    sent = send_verification(cursor, session["user"], row["EMAIL"], row["NAME"] or session["user"])
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Confirmation link sent to {row['EMAIL']}." if sent
+                    else "Email isn't set up on this server yet, so the confirmation link was written to the server log."})
+
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json() or {}
+    identifier = (data.get("identifier") or "").strip().lower()
+    if not identifier:
+        return jsonify({"error": "Enter your username or email address."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_rate_limited(cursor, f"forgot:{client_ip()}", 5, 3600):
+        conn.commit()
+        conn.close()
+        return too_many_requests("Too many reset requests. Please try again in an hour.")
+    cursor.execute("SELECT USERNAME, NAME, EMAIL FROM USER_DATA WHERE USERNAME = ? OR EMAIL = ?", (identifier, identifier))
+    row = cursor.fetchone()
+    if row and row["EMAIL"]:
+        token = create_token(cursor, row["USERNAME"], "reset_password", RESET_LINK_LIFETIME)
+        send_password_reset_email(row["EMAIL"], row["NAME"] or row["USERNAME"], f"{public_base_url()}/?reset={token}")
+    conn.commit()
+    conn.close()
+    # The same answer whether or not the account exists, so this can't reveal who has an account.
+    return jsonify({"message": "If an account with an email address matches, we've sent it a reset link. It expires in 1 hour."})
+
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json() or {}
+    password = validate_password(data.get("password"))
+    conn = get_db()
+    cursor = conn.cursor()
+    username = consume_token(cursor, data.get("token"), "reset_password")
+    if not username:
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "This reset link is invalid, already used or expired. Request a new one from “Forgot password?”."}), 400
+    cursor.execute(
+        "UPDATE USER_DATA SET PASSWORD = ?, FAILED_LOGINS = 0, LOCKED_UNTIL = NULL WHERE USERNAME = ?",
+        (generate_password_hash(password), username),
+    )
+    conn.commit()
+    conn.close()
+    session.clear()
+    return jsonify({"message": "Password updated. You can now sign in with your new password."})
+
+
+# ================= ACCOUNT SETTINGS =================
+
+@app.route("/api/account/email", methods=["PUT"])
+@login_required
+def change_email():
+    data = request.get_json() or {}
+    email = validate_email(data.get("email"))
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT USERNAME FROM USER_DATA WHERE EMAIL = ? AND USERNAME != ?", (email, session["user"]))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Another account already uses that email."}), 409
+    cursor.execute("SELECT EMAIL, NAME FROM USER_DATA WHERE USERNAME = ?", (session["user"],))
+    row = cursor.fetchone()
+    if row["EMAIL"] == email:
+        conn.close()
+        return jsonify({"message": "That's already your email address."})
+    cursor.execute("UPDATE USER_DATA SET EMAIL = ?, EMAIL_VERIFIED_AT = NULL WHERE USERNAME = ?", (email, session["user"]))
+    sent = send_verification(cursor, session["user"], email, row["NAME"] or session["user"])
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Email updated. We've sent a confirmation link to {email}." if sent
+                    else "Email updated. Email isn't set up on this server yet, so the confirmation link was written to the server log."})
+
+
+@app.route("/api/account/password", methods=["POST"])
+@login_required
+def change_password():
+    data = request.get_json() or {}
+    new_password = validate_password(data.get("new_password"))
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_rate_limited(cursor, f"change-password:{session['user']}", 10, 3600):
+        conn.commit()
+        conn.close()
+        return too_many_requests()
+    cursor.execute("SELECT PASSWORD FROM USER_DATA WHERE USERNAME = ?", (session["user"],))
+    row = cursor.fetchone()
+    if not row or not check_password_hash(row["PASSWORD"], data.get("current_password") or ""):
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "Your current password isn't right."}), 401
+    cursor.execute("UPDATE USER_DATA SET PASSWORD = ? WHERE USERNAME = ?", (generate_password_hash(new_password), session["user"]))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Password changed."})
+
+
+@app.route("/api/account/onboarded", methods=["POST"])
+@login_required
+def mark_onboarded():
+    conn = get_db()
+    conn.execute("UPDATE USER_DATA SET ONBOARDED_AT = CURRENT_TIMESTAMP WHERE USERNAME = ? AND ONBOARDED_AT IS NULL", (session["user"],))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Welcome tour finished."})
 
 
 # ================= DASHBOARD METRICS (ROLE-BASED APPOINTMENT COUNTS) =================
@@ -362,9 +619,9 @@ def get_stats():
         cursor.execute(
             """SELECT COUNT(*) FROM CONSULTATION C
                JOIN PATIENTS P ON C.PATIENT_ID = P.PID
-               WHERE (P.USERNAME = ? OR P.MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?))
+               WHERE P.USERNAME = ?
                AND C.STATUS = 'Scheduled'""",
-            (session["user"], session["user"]),
+            (session["user"],),
         )
         scheduled_consultations = cursor.fetchone()[0]
     else:
@@ -435,7 +692,7 @@ def book_bed():
     cursor = conn.cursor()
 
     # Retrieve patient record linked to current user
-    cursor.execute("SELECT PID, NAME FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)", (session["user"], session["user"]))
+    cursor.execute("SELECT PID, NAME FROM PATIENTS WHERE USERNAME = ?", (session["user"],))
     patient = cursor.fetchone()
     if not patient:
         conn.close()
@@ -573,8 +830,8 @@ def get_pharmacy():
 @login_required
 def buy_medicine():
     data = request.get_json() or {}
-    medicine_name = (data.get("MEDICINE_NAME") or "").strip()
-    quantity = int(data.get("QUANTITY", 1))
+    medicine_name = clean_text(data.get("MEDICINE_NAME"), "Medicine", max_len=100)
+    quantity = parse_int(data.get("QUANTITY", 1), "Quantity", minimum=1, maximum=100)
 
     if not medicine_name or quantity < 1:
         return jsonify({"error": "Please provide a valid medicine name and quantity (minimum 1)."}), 400
@@ -596,7 +853,7 @@ def buy_medicine():
         }), 400
 
     # Retrieve patient information
-    cursor.execute("SELECT PID, NAME FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)", (session["user"], session["user"]))
+    cursor.execute("SELECT PID, NAME FROM PATIENTS WHERE USERNAME = ?", (session["user"],))
     p_row = cursor.fetchone()
     patient_id = p_row["PID"] if p_row else "PAT-WALKIN"
     patient_name = p_row["NAME"] if p_row else session.get("name", "Online Patient")
@@ -644,7 +901,7 @@ def get_purchase_history():
     if session.get("role") == "patient":
         cursor.execute(
             """SELECT * FROM MEDICINE_PURCHASES 
-               WHERE USERNAME = ? OR PATIENT_ID = (SELECT PID FROM PATIENTS WHERE USERNAME = ?)
+               WHERE USERNAME = ? OR PATIENT_ID IN (SELECT PID FROM PATIENTS WHERE USERNAME = ?)
                ORDER BY PURCHASE_DATE DESC""",
             (session["user"], session["user"]),
         )
@@ -660,10 +917,10 @@ def get_purchase_history():
 @staff_required
 def add_medicine():
     data = request.get_json() or {}
-    name = data.get("MEDICINE_NAME", "").strip()
-    mtype = data.get("MEDICINE_TYPE", "").strip()
-    stock = int(data.get("STOCK", 0))
-    price = float(data.get("PRICE", 0.0))
+    name = clean_text(data.get("MEDICINE_NAME"), "Medicine name", max_len=100)
+    mtype = clean_text(data.get("MEDICINE_TYPE"), "Formulation type", max_len=50)
+    stock = parse_int(data.get("STOCK", 0), "Stock quantity", minimum=0, maximum=1_000_000)
+    price = parse_float(data.get("PRICE", 0.0), "Unit price", minimum=0, maximum=10_000_000)
 
     if not name or not mtype:
         return jsonify({"error": "Medicine Name and Type are required"}), 400
@@ -688,15 +945,15 @@ def add_medicine():
 @staff_required
 def update_stock(medicine_name):
     data = request.get_json() or {}
-    stock = data.get("STOCK")
-    price = data.get("PRICE")
+    stock = parse_int(data.get("STOCK"), "Stock quantity", minimum=0, maximum=1_000_000, required=False)
+    price = parse_float(data.get("PRICE"), "Unit price", minimum=0, maximum=10_000_000, required=False)
 
     conn = get_db()
     cursor = conn.cursor()
     if stock is not None:
-        cursor.execute("UPDATE PHARMACY SET STOCK = ? WHERE MEDICINE_NAME = ?", (int(stock), medicine_name))
+        cursor.execute("UPDATE PHARMACY SET STOCK = ? WHERE MEDICINE_NAME = ?", (stock, medicine_name))
     if price is not None:
-        cursor.execute("UPDATE PHARMACY SET PRICE = ? WHERE MEDICINE_NAME = ?", (float(price), medicine_name))
+        cursor.execute("UPDATE PHARMACY SET PRICE = ? WHERE MEDICINE_NAME = ?", (price, medicine_name))
     conn.commit()
     conn.close()
     return jsonify({"message": f"Updated {medicine_name}"})
@@ -713,8 +970,8 @@ def get_patient_profile():
         """SELECT P.*, B.BED_NUMBER, B.WARD_TYPE
            FROM PATIENTS P
            LEFT JOIN BEDS B ON P.PID = B.PATIENT_ID AND B.STATUS = 'Occupied'
-           WHERE P.USERNAME = ? OR P.MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)""",
-        (session["user"], session["user"]),
+           WHERE P.USERNAME = ?""",
+        (session["user"],),
     )
     profile = cursor.fetchone()
     conn.close()
@@ -728,17 +985,14 @@ def get_patient_profile():
 @login_required
 def update_patient_profile():
     data = request.get_json() or {}
-    name = (data.get("NAME") or "").strip()
-    age = data.get("AGE")
-    gender = data.get("GENDER")
-    mobile = (data.get("MOBILE_NO") or "").strip()
-    issue = (data.get("ISSUE") or "").strip()
-    blood_group = (data.get("BLOOD_GROUP") or "Unknown").strip()
-    allergies = (data.get("ALLERGIES") or "None reported").strip()
-    med_history = (data.get("MEDICAL_HISTORY") or "No prior chronic conditions").strip()
-
-    if not name:
-        return jsonify({"error": "Name is required"}), 400
+    name = clean_text(data.get("NAME"), "Full name", max_len=100)
+    age = parse_int(data.get("AGE"), "Age", minimum=0, maximum=130, required=False)
+    gender = data.get("GENDER") if data.get("GENDER") in GENDERS else None
+    mobile = validate_mobile(data.get("MOBILE_NO"))
+    issue = clean_text(data.get("ISSUE"), "Current concern", max_len=300)
+    blood_group = data.get("BLOOD_GROUP") if data.get("BLOOD_GROUP") in BLOOD_GROUPS else "Unknown"
+    allergies = clean_text(data.get("ALLERGIES"), "Allergies", required=False, max_len=300) or "None reported"
+    med_history = clean_text(data.get("MEDICAL_HISTORY"), "Medical history", required=False, max_len=1000) or "No prior chronic conditions"
 
     conn = get_db()
     cursor = conn.cursor()
@@ -748,8 +1002,8 @@ def update_patient_profile():
         """UPDATE PATIENTS
            SET NAME = ?, AGE = ?, GENDER = ?, MOBILE_NO = ?, ISSUE = ?,
                BLOOD_GROUP = ?, ALLERGIES = ?, MEDICAL_HISTORY = ?
-           WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)""",
-        (name, age, gender, mobile, issue, blood_group, allergies, med_history, session["user"], session["user"]),
+           WHERE USERNAME = ?""",
+        (name, age, gender, mobile, issue, blood_group, allergies, med_history, session["user"]),
     )
 
     # Sync User Account Name and Contact
@@ -783,16 +1037,13 @@ def get_employees():
 @staff_required
 def add_employee():
     data = request.get_json() or {}
-    eid = data.get("EID", "").strip().upper()
-    name = data.get("NAME", "").strip()
-    dept = data.get("DEPARTMENT", "").strip()
-    age = data.get("AGE")
-    gender = data.get("GENDER", "").strip()
-    salary = data.get("SALARY", 0.0)
-    mobile = data.get("MOBILE_NO", "").strip()
-
-    if not eid or not name or not dept:
-        return jsonify({"error": "EID, Name, and Department are required"}), 400
+    eid = clean_text(data.get("EID"), "Employee ID", max_len=20).upper()
+    name = clean_text(data.get("NAME"), "Full name", max_len=100)
+    dept = clean_text(data.get("DEPARTMENT"), "Department", max_len=100)
+    age = parse_int(data.get("AGE"), "Age", minimum=18, maximum=100, required=False)
+    gender = data.get("GENDER") if data.get("GENDER") in GENDERS else None
+    salary = parse_float(data.get("SALARY", 0.0), "Salary", minimum=0, maximum=100_000_000)
+    mobile = validate_mobile(data.get("MOBILE_NO"))
 
     conn = get_db()
     cursor = conn.cursor()
@@ -836,8 +1087,8 @@ def get_patients():
 
     if session.get("role") == "patient":
         cursor.execute(
-            "SELECT * FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)",
-            (session["user"], session["user"]),
+            "SELECT * FROM PATIENTS WHERE USERNAME = ?",
+            (session["user"],),
         )
     else:
         cursor.execute(
@@ -863,26 +1114,22 @@ def add_patient():
     next_idx = cursor.fetchone()[0] + 1
     pid = data.get("PID") or f"PAT{next_idx:03d}"
     bill_no = data.get("BILL_NO") or f"BILL-{1000 + next_idx}"
-    name = data.get("NAME", "").strip()
-    issue = data.get("ISSUE", "").strip()
-    age = data.get("AGE")
-    gender = data.get("GENDER", "Not Specified")
-    fees = data.get("FEES", 0.0)
-    mobile = data.get("MOBILE_NO", "").strip()
-    blood_group = data.get("BLOOD_GROUP", "Unknown")
-    allergies = data.get("ALLERGIES", "None reported")
-    med_history = data.get("MEDICAL_HISTORY", "No prior chronic conditions")
-    username = data.get("USERNAME")
-    guardian_name = (data.get("GUARDIAN_NAME") or "").strip() or None
-
-    if not name:
-        conn.close()
-        return jsonify({"error": "Patient name is required"}), 400
     try:
-        is_minor = age is not None and int(age) < ADULT_AGE
-    except (TypeError, ValueError):
+        name = clean_text(data.get("NAME"), "Patient name", max_len=100)
+        issue = clean_text(data.get("ISSUE"), "Health concern", required=False, max_len=300)
+        age = parse_int(data.get("AGE"), "Age", minimum=0, maximum=130, required=False)
+        fees = parse_float(data.get("FEES", 0.0), "Consultation fee", minimum=0, maximum=10_000_000)
+        mobile = validate_mobile(data.get("MOBILE_NO"))
+        allergies = clean_text(data.get("ALLERGIES"), "Allergies", required=False, max_len=300) or "None reported"
+        med_history = clean_text(data.get("MEDICAL_HISTORY"), "Medical history", required=False, max_len=1000) or "No prior chronic conditions"
+        guardian_name = clean_text(data.get("GUARDIAN_NAME"), "Parent / guardian name", required=False, max_len=100) or None
+    except ValidationError:
         conn.close()
-        return jsonify({"error": "Age must be a number"}), 400
+        raise
+    gender = data.get("GENDER") if data.get("GENDER") in GENDERS else "Not Specified"
+    blood_group = data.get("BLOOD_GROUP") if data.get("BLOOD_GROUP") in BLOOD_GROUPS else "Unknown"
+    username = data.get("USERNAME")
+    is_minor = age is not None and age < ADULT_AGE
     if is_minor and not guardian_name:
         conn.close()
         return jsonify({"error": f"Patients under {ADULT_AGE} need a parent or legal guardian recorded as consenting."}), 400
@@ -945,14 +1192,11 @@ def get_emt():
 @staff_required
 def add_emt():
     data = request.get_json() or {}
-    vno = data.get("VNO", "").strip().upper()
-    vtype = data.get("VTYPE", "").strip()
-    driver = data.get("DRIVER_NAME", "").strip()
-    mobile = data.get("MOBILE_NO", "").strip()
-    status = data.get("STATUS", "Available")
-
-    if not vno or not driver:
-        return jsonify({"error": "Vehicle No and Driver Name are required"}), 400
+    vno = clean_text(data.get("VNO"), "Vehicle number", max_len=20).upper().replace(" ", "")
+    vtype = clean_text(data.get("VTYPE"), "Vehicle type", max_len=100)
+    driver = clean_text(data.get("DRIVER_NAME"), "Driver name", max_len=100)
+    mobile = validate_mobile(data.get("MOBILE_NO"))
+    status = data.get("STATUS") if data.get("STATUS") in ("Available", "Dispatched", "Maintenance") else "Available"
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1002,8 +1246,8 @@ def get_consultations():
     params = []
 
     if session.get("role") == "patient":
-        query += " WHERE P.USERNAME = ? OR P.MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)"
-        params = [session["user"], session["user"]]
+        query += " WHERE P.USERNAME = ?"
+        params = [session["user"]]
 
     query += " ORDER BY C.TIME DESC"
     cursor.execute(query, params)
@@ -1043,16 +1287,19 @@ def book_consultation():
     data = request.get_json() or {}
     patient_id = data.get("PATIENT_ID")
     emp_id = data.get("EMP_ID")
-    reason = data.get("REASON", "General Checkup")
+    reason = clean_text(data.get("REASON"), "Appointment reason", max_len=300)
     # Patients are always charged the published fee shown before booking; only staff may override it.
-    fees = data.get("FEES", CONSULTATION_FEE) if session.get("role") == "staff" else CONSULTATION_FEE
-    time = data.get("TIME") or datetime.now().strftime("%Y-%m-%d %H:%M")
+    if session.get("role") == "staff":
+        fees = parse_float(data.get("FEES", CONSULTATION_FEE), "Fee", minimum=0, maximum=10_000_000)
+    else:
+        fees = CONSULTATION_FEE
+    time = parse_appointment_time(data.get("TIME"))
 
     conn = get_db()
     cursor = conn.cursor()
 
     if session.get("role") == "patient":
-        cursor.execute("SELECT PID FROM PATIENTS WHERE USERNAME = ? OR MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)", (session["user"], session["user"]))
+        cursor.execute("SELECT PID FROM PATIENTS WHERE USERNAME = ?", (session["user"],))
         p_row = cursor.fetchone()
         if p_row:
             patient_id = p_row["PID"]
@@ -1096,8 +1343,8 @@ def get_prescriptions():
     """
     params = []
     if session.get("role") == "patient":
-        query += " WHERE P.USERNAME = ? OR P.MOBILE_NO = (SELECT MOBILE_NO FROM USER_DATA WHERE USERNAME = ?)"
-        params = [session["user"], session["user"]]
+        query += " WHERE P.USERNAME = ?"
+        params = [session["user"]]
 
     query += " ORDER BY PR.DATE DESC"
     cursor.execute(query, params)
@@ -1149,9 +1396,11 @@ def get_prescription_details(rx_id):
 def create_prescription():
     data = request.get_json() or {}
     consultation_id = data.get("CONSULTATION_ID")
-    diagnosis = data.get("DIAGNOSIS", "").strip()
-    instructions = data.get("INSTRUCTIONS", "").strip()
+    diagnosis = clean_text(data.get("DIAGNOSIS"), "Clinical diagnosis", max_len=300)
+    instructions = clean_text(data.get("INSTRUCTIONS"), "Instructions", required=False, max_len=1000)
     medicines = data.get("MEDICINES", [])
+    if not isinstance(medicines, list) or len(medicines) > 30:
+        raise ValidationError("Add between 0 and 30 medicines.")
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     if not consultation_id:
@@ -1333,6 +1582,86 @@ def list_privacy_requests():
     return jsonify(rows)
 
 
+def erase_account(cursor, username):
+    """Erase a login and its non-clinical personal data; returns a note describing what happened.
+
+    Clinical records (consultations and prescriptions) are retained, unlinked from the
+    login, for the statutory medical-record retention period described in the Privacy Policy.
+    """
+    cursor.execute("SELECT PID FROM PATIENTS WHERE USERNAME = ?", (username,))
+    pids = [r["PID"] for r in cursor.fetchall()]
+    retained = []
+    for pid in pids:
+        cursor.execute("SELECT COUNT(*) FROM CONSULTATION WHERE PATIENT_ID = ?", (pid,))
+        has_clinical_records = cursor.fetchone()[0] > 0
+        cursor.execute("UPDATE BEDS SET STATUS = 'Available', PATIENT_ID = NULL, ASSIGNED_DATE = NULL WHERE PATIENT_ID = ?", (pid,))
+        if has_clinical_records:
+            cursor.execute("UPDATE PATIENTS SET USERNAME = NULL WHERE PID = ?", (pid,))
+            retained.append(pid)
+        else:
+            cursor.execute("DELETE FROM PATIENTS WHERE PID = ?", (pid,))
+
+    cursor.execute(
+        "UPDATE MEDICINE_PURCHASES SET PATIENT_NAME = 'Deleted user', USERNAME = NULL WHERE USERNAME = ? OR PATIENT_ID IN ({})".format(
+            ",".join("?" * len(pids)) or "NULL"
+        ),
+        (username, *pids),
+    )
+    cursor.execute("DELETE FROM AUTH_TOKENS WHERE USERNAME = ?", (username,))
+    cursor.execute("DELETE FROM USER_DATA WHERE USERNAME = ?", (username,))
+
+    note = "Account and non-clinical personal data erased."
+    if retained:
+        note += f" Clinical records for {', '.join(retained)} retained under medical-record retention law and unlinked from the login."
+    return note
+
+
+@app.route("/api/account/delete", methods=["POST"])
+@login_required
+def delete_my_account():
+    """Self-service account deletion, effective immediately."""
+    data = request.get_json() or {}
+    conn = get_db()
+    cursor = conn.cursor()
+    if is_rate_limited(cursor, f"delete-account:{session['user']}", 5, 3600):
+        conn.commit()
+        conn.close()
+        return too_many_requests()
+    cursor.execute("SELECT PASSWORD, ROLE FROM USER_DATA WHERE USERNAME = ?", (session["user"],))
+    row = cursor.fetchone()
+    if not row or not check_password_hash(row["PASSWORD"], data.get("password") or ""):
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "That password isn't right, so your account was not deleted."}), 401
+    if (data.get("confirm") or "").strip().upper() != "DELETE":
+        conn.commit()
+        conn.close()
+        return jsonify({"error": "Type DELETE to confirm."}), 400
+    if row["ROLE"] == "staff":
+        cursor.execute("SELECT COUNT(*) FROM USER_DATA WHERE ROLE = 'staff'")
+        if cursor.fetchone()[0] <= 1:
+            conn.close()
+            return jsonify({"error": "You're the only staff account, so it can't be deleted. Create another staff account first."}), 409
+
+    username = session["user"]
+    note = erase_account(cursor, username)
+    reason = clean_text(data.get("reason"), "Reason", required=False, max_len=500) or None
+    # Keep an audit record of the erasure (username only) for the staff Privacy Requests log.
+    cursor.execute(
+        """INSERT INTO DATA_REQUESTS (USERNAME, REQUEST_TYPE, STATUS, REASON, RESOLUTION_NOTE, RESOLVED_AT, RESOLVED_BY)
+           VALUES (?, 'deletion', 'Completed', ?, ?, CURRENT_TIMESTAMP, 'self-service')""",
+        (username, reason, note),
+    )
+    conn.commit()
+    conn.close()
+    session.clear()
+    retained = note.replace("Account and non-clinical personal data erased.", "").strip()
+    message = "Your account has been deleted."
+    if retained:
+        message += " Your consultation and prescription records are kept, unlinked from you, for the period medical-record law requires."
+    return jsonify({"message": message})
+
+
 @app.route("/api/privacy/requests/<int:request_id>/complete", methods=["POST"])
 @staff_required
 def complete_privacy_request(request_id):
@@ -1357,30 +1686,7 @@ def complete_privacy_request(request_id):
         conn.close()
         return jsonify({"error": "Another staff member must process your own deletion request."}), 403
 
-    cursor.execute("SELECT PID FROM PATIENTS WHERE USERNAME = ?", (username,))
-    pids = [r["PID"] for r in cursor.fetchall()]
-    retained = []
-    for pid in pids:
-        cursor.execute("SELECT COUNT(*) FROM CONSULTATION WHERE PATIENT_ID = ?", (pid,))
-        has_clinical_records = cursor.fetchone()[0] > 0
-        cursor.execute("UPDATE BEDS SET STATUS = 'Available', PATIENT_ID = NULL, ASSIGNED_DATE = NULL WHERE PATIENT_ID = ?", (pid,))
-        if has_clinical_records:
-            cursor.execute("UPDATE PATIENTS SET USERNAME = NULL WHERE PID = ?", (pid,))
-            retained.append(pid)
-        else:
-            cursor.execute("DELETE FROM PATIENTS WHERE PID = ?", (pid,))
-
-    cursor.execute(
-        "UPDATE MEDICINE_PURCHASES SET PATIENT_NAME = 'Deleted user', USERNAME = NULL WHERE USERNAME = ? OR PATIENT_ID IN ({})".format(
-            ",".join("?" * len(pids)) or "NULL"
-        ),
-        (username, *pids),
-    )
-    cursor.execute("DELETE FROM USER_DATA WHERE USERNAME = ?", (username,))
-
-    note = "Account and non-clinical personal data erased."
-    if retained:
-        note += f" Clinical records for {', '.join(retained)} retained under medical-record retention law and unlinked from the login."
+    note = erase_account(cursor, username)
     cursor.execute(
         "UPDATE DATA_REQUESTS SET STATUS = 'Completed', RESOLUTION_NOTE = ?, RESOLVED_AT = CURRENT_TIMESTAMP, RESOLVED_BY = ? WHERE ID = ?",
         (note, session["user"], request_id),
@@ -1421,6 +1727,113 @@ def update_preferences():
     conn.commit()
     conn.close()
     return jsonify({"message": "Communication preferences saved.", "marketing_opt_in": bool(opt_in)})
+
+
+# ================= ANALYTICS, ERROR LOG & BACKUPS (STAFF "SYSTEM" PAGE) =================
+
+KNOWN_PAGES = {
+    "/", "/privacy", "/terms", "/refunds", "/cookies", "/accessibility",
+    "/app/dashboard", "/app/beds", "/app/employees", "/app/patients", "/app/profile", "/app/consultations",
+    "/app/prescriptions", "/app/pharmacy", "/app/emt", "/app/privacy", "/app/account", "/app/system",
+}
+
+
+@app.route("/api/analytics/pageview", methods=["POST"])
+def record_pageview():
+    """Cookieless, first-party page counting: one counter per page per day, nothing about the visitor."""
+    data = request.get_json(silent=True) or {}
+    path = str(data.get("path") or "")[:100]
+    if path not in KNOWN_PAGES:
+        return ("", 204)
+    conn = get_db()
+    cursor = conn.cursor()
+    if not is_rate_limited(cursor, f"pageview:{client_ip()}", 300, 3600):
+        cursor.execute(
+            """INSERT INTO PAGE_VIEWS (DAY, PATH, VIEWS) VALUES (?, ?, 1)
+               ON CONFLICT(DAY, PATH) DO UPDATE SET VIEWS = VIEWS + 1""",
+            (datetime.now().strftime("%Y-%m-%d"), path),
+        )
+    conn.commit()
+    conn.close()
+    return ("", 204)
+
+
+@app.route("/api/analytics/summary", methods=["GET"])
+@staff_required
+def analytics_summary():
+    since = (datetime.now() - timedelta(days=29)).strftime("%Y-%m-%d")
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DAY, SUM(VIEWS) AS VIEWS FROM PAGE_VIEWS WHERE DAY >= ? GROUP BY DAY ORDER BY DAY", (since,))
+    by_day = [dict(r) for r in cursor.fetchall()]
+    cursor.execute("SELECT PATH, SUM(VIEWS) AS VIEWS FROM PAGE_VIEWS WHERE DAY >= ? GROUP BY PATH ORDER BY VIEWS DESC LIMIT 15", (since,))
+    by_page = [dict(r) for r in cursor.fetchall()]
+    cursor.execute("SELECT COUNT(*) FROM USER_DATA WHERE CREATED_AT >= ?", (since,))
+    signups = cursor.fetchone()[0]
+    conn.close()
+    return jsonify({
+        "since": since,
+        "total_views": sum(r["VIEWS"] for r in by_day),
+        "signups": signups,
+        "by_day": by_day,
+        "by_page": by_page,
+    })
+
+
+@app.route("/api/errors", methods=["POST"])
+def record_client_error():
+    """Browser errors reported by the front end (message, script location and stack trace only)."""
+    data = request.get_json(silent=True) or {}
+    message = str(data.get("message") or "Unknown browser error")[:500]
+    conn = get_db()
+    cursor = conn.cursor()
+    limited = is_rate_limited(cursor, f"client-error:{client_ip()}", 30, 3600)
+    conn.commit()
+    conn.close()
+    if not limited:
+        detail = f"{data.get('source') or ''}\n{data.get('stack') or ''}"[:4000]
+        log_error("client", message, detail, str(data.get("page") or "")[:300])
+    return ("", 204)
+
+
+@app.route("/api/errors", methods=["GET"])
+@staff_required
+def list_errors():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ERROR_LOG ORDER BY ID DESC LIMIT 100")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/api/errors", methods=["DELETE"])
+@staff_required
+def clear_errors():
+    conn = get_db()
+    conn.execute("DELETE FROM ERROR_LOG")
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Error log cleared."})
+
+
+@app.route("/api/admin/backup", methods=["GET"])
+@staff_required
+def download_backup():
+    """A consistent snapshot of the whole database, made with SQLite's online backup API."""
+    handle, path = tempfile.mkstemp(suffix=".sqlite")
+    os.close(handle)
+    source = sqlite3.connect(DATABASE)
+    target = sqlite3.connect(path)
+    with target:
+        source.backup(target)
+    source.close()
+    target.close()
+    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    response = send_file(path, mimetype="application/vnd.sqlite3", as_attachment=True,
+                         download_name=f"asclepio-backup-{stamp}.sqlite")
+    response.call_on_close(lambda: os.remove(path))
+    return response
 
 
 def _simple_page(title, body_html):

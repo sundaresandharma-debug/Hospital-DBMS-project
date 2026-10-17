@@ -12,13 +12,130 @@ let siteInfo = { staff_signup_enabled: false, consultation_fee: 0 };
 document.addEventListener('DOMContentLoaded', async () => {
   initCookieConsent();
   loadPublicStats();
+  trackPageView('/');
   await loadSiteInfo();
   await verifySessionState();
-  if (activeUser) {
-    applyRolePermissions();
-    refreshDashboard();
-  }
+  handleEmailLinks();
 });
+
+/* --------------------------------------------------------------------------
+   0. Loading states, friendly errors & error tracking (applies to every request)
+   -------------------------------------------------------------------------- */
+
+const nativeFetch = window.fetch.bind(window);
+let inflightRequests = 0;
+const busyButtons = new Set();
+
+window.fetch = async (...args) => {
+  inflightRequests += 1;
+  try {
+    const response = await nativeFetch(...args);
+    if (response.status === 401 && activeUser) {
+      const body = await response.clone().json().catch(() => ({}));
+      if ((body.error || '').startsWith('Authentication required')) handleSessionExpired();
+    }
+    return response;
+  } catch (err) {
+    throw new Error("Can't reach the server. Check your internet connection and try again.");
+  } finally {
+    inflightRequests -= 1;
+    if (inflightRequests === 0) releaseBusyButtons();
+  }
+};
+
+// While a form is being saved, its submit button shows a spinner and can't be clicked twice.
+document.addEventListener('submit', (event) => {
+  const button = event.submitter || event.target.querySelector('[type="submit"]');
+  if (!button) return;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.classList.add('is-loading');
+  busyButtons.add(button);
+  // If the handler stopped before sending anything (for example a validation message), re-enable straight away.
+  setTimeout(() => { if (inflightRequests === 0) releaseBusyButtons(); }, 60);
+}, true);
+
+function releaseBusyButtons() {
+  busyButtons.forEach((button) => {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.classList.remove('is-loading');
+  });
+  busyButtons.clear();
+}
+
+function handleSessionExpired() {
+  activeUser = null;
+  renderUnauthenticatedView();
+  notifyUser('Your session has ended. Please sign in again.', 'info');
+}
+
+// Report unexpected browser errors to the staff error log, and tell the user something went wrong.
+let reportedErrors = 0;
+function reportClientError(message, source, stack) {
+  if (reportedErrors >= 10) return;
+  reportedErrors += 1;
+  nativeFetch('/api/errors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: String(message).slice(0, 500), source, stack: String(stack || '').slice(0, 3000), page: location.pathname }),
+    keepalive: true
+  }).catch(() => {});
+}
+
+window.addEventListener('error', (event) => {
+  reportClientError(event.message, `${event.filename}:${event.lineno}:${event.colno}`, event.error && event.error.stack);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason || {};
+  const message = reason.message || String(reason);
+  if (!message.startsWith("Can't reach the server")) reportClientError(message, 'unhandledrejection', reason.stack);
+  notifyUser(message.startsWith("Can't reach the server") ? message : 'Something went wrong. Please try again.', 'error');
+});
+
+// Table placeholders: loading, empty and failed states
+function tableMessage(tbodyId, colspan, icon, title, hint = '', retryFn = '') {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="${colspan}">${stateBlock(icon, title, hint, retryFn)}</td></tr>`;
+}
+
+function stateBlock(icon, title, hint = '', retryFn = '') {
+  const iconHtml = icon === 'spinner'
+    ? '<span class="spinner" aria-hidden="true"></span>'
+    : `<i class="fa-solid ${icon}" aria-hidden="true"></i>`;
+  return `
+    <div class="state-block" ${icon === 'spinner' ? 'role="status"' : ''}>
+      ${iconHtml}
+      <p class="state-title">${escapeHtml(title)}</p>
+      ${hint ? `<p class="state-hint">${escapeHtml(hint)}</p>` : ''}
+      ${retryFn ? `<button type="button" class="btn btn-sm btn-outline" onclick="${retryFn}()">Try again</button>` : ''}
+    </div>`;
+}
+
+const showTableLoading = (tbodyId, colspan) => tableMessage(tbodyId, colspan, 'spinner', 'Loading…');
+
+// GET a JSON API and turn server errors into readable messages.
+async function getJSON(url) {
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload === null) {
+    throw new Error((payload && payload.error) || 'Something went wrong on our side. Please try again.');
+  }
+  return payload;
+}
+
+// First-party, cookieless page counting (skipped when the browser asks not to be tracked)
+function trackPageView(path) {
+  if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
+  nativeFetch('/api/analytics/pageview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+    keepalive: true
+  }).catch(() => {});
+}
 
 /* --------------------------------------------------------------------------
    1. Password Toggle & Authentication Handlers
@@ -145,9 +262,9 @@ async function handleLogin(event) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Login failed');
 
-    activeUser = payload.user;
-    notifyUser(`Welcome back, ${activeUser.name}!`, 'success');
-    renderAuthenticatedPortal();
+    notifyUser(`Welcome back, ${payload.user.name}!`, 'success');
+    document.getElementById('login-password').value = '';
+    await verifySessionState();
   } catch (err) {
     notifyUser(err.message, 'error');
   }
@@ -159,6 +276,7 @@ async function handleSignup(event) {
   const mobileVal = document.getElementById('signup-mobile').value.trim();
   const usernameVal = document.getElementById('signup-username').value.trim();
   const passwordVal = document.getElementById('signup-password').value.trim();
+  const emailVal = document.getElementById('signup-email').value.trim();
   const roleVal = document.querySelector('input[name="signup-role"]:checked').value;
   const ageGroup = document.querySelector('input[name="signup-age-group"]:checked');
 
@@ -176,6 +294,7 @@ async function handleSignup(event) {
         mobile_no: mobileVal,
         username: usernameVal,
         password: passwordVal,
+        email: emailVal,
         role: roleVal,
         staff_invite_code: document.getElementById('signup-invite-code').value.trim(),
         age_group: ageGroup ? ageGroup.value : null,
@@ -189,9 +308,8 @@ async function handleSignup(event) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Registration failed');
 
-    activeUser = payload.user;
-    notifyUser(`Account registered as ${roleVal.toUpperCase()}!`, 'success');
-    renderAuthenticatedPortal();
+    notifyUser(payload.message, 'success');
+    await verifySessionState();
   } catch (err) {
     notifyUser(err.message, 'error');
   }
@@ -213,7 +331,11 @@ async function verifySessionState() {
 }
 
 async function handleLogout() {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (err) {
+    // Even if the server can't be reached, forget the user locally.
+  }
   activeUser = null;
   notifyUser('You have been logged out.', 'info');
   renderUnauthenticatedView();
@@ -243,8 +365,45 @@ function renderAuthenticatedPortal() {
   }
 
   applyRolePermissions();
+  updateVerifyBanner();
   switchView('dashboard');
+  if (!activeUser.onboarded) startOnboarding();
 }
+
+function updateVerifyBanner() {
+  const banner = document.getElementById('verify-banner');
+  const text = document.getElementById('verify-banner-text');
+  if (!activeUser || activeUser.email_verified) {
+    banner.classList.add('hidden');
+    return;
+  }
+  text.textContent = activeUser.email
+    ? `Please confirm your email address (${activeUser.email}) using the link we sent you.`
+    : 'Add an email address to your account so you can reset your password if you forget it.';
+  banner.querySelector('.btn').classList.toggle('hidden', !activeUser.email);
+  banner.classList.remove('hidden');
+}
+
+/* --------------------------------------------------------------------------
+   Mobile menu
+   -------------------------------------------------------------------------- */
+
+function toggleMobileMenu(force) {
+  const appScreen = document.getElementById('app-screen');
+  const open = typeof force === 'boolean' ? force : !appScreen.classList.contains('menu-open');
+  appScreen.classList.toggle('menu-open', open);
+  const button = document.getElementById('btn-menu');
+  button.setAttribute('aria-expanded', String(open));
+  button.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  if (open) document.querySelector('#sidebar-nav .nav-item:not(.hidden)')?.focus();
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.getElementById('app-screen')?.classList.contains('menu-open')) {
+    toggleMobileMenu(false);
+    document.getElementById('btn-menu').focus();
+  }
+});
 
 function applyRolePermissions() {
   const isStaff = activeUser && activeUser.role === 'staff';
@@ -298,7 +457,9 @@ function switchView(targetViewKey) {
     employees: ['Medical Specialists & Doctors', 'Registry of clinical practitioners and specialists'],
     patients: [activeUser.role === 'staff' ? 'Patient Database' : 'My Medical Profile', 'Inpatient and outpatient clinical histories'],
     profile: ['My Medical Profile', 'Your health record, purchases and privacy controls'],
-    privacy: ['Privacy Requests', 'Data deletion requests from patients and staff'],
+    privacy: ['Privacy Requests', 'Account deletions and data requests'],
+    account: ['Account & Privacy', 'Email, password, your data and account deletion'],
+    system: ['System', 'Analytics, error log and database backups'],
     consultations: ['Consultation Appointments', 'Scheduled clinical appointments & status'],
     prescriptions: ['Digital Prescriptions & Rx Slip', 'Doctor diagnoses, dosage plans & printable slips'],
     pharmacy: ['Pharmacy Stock & Formulations', 'Inventory levels, rates & instant restock/purchase'],
@@ -320,6 +481,10 @@ function switchView(targetViewKey) {
   if (targetViewKey === 'emt') loadAmbulanceFleet();
   if (targetViewKey === 'profile') loadPatientProfile();
   if (targetViewKey === 'privacy') loadPrivacyRequests();
+  if (targetViewKey === 'account') loadAccountPage();
+  if (targetViewKey === 'system') loadSystemPage();
+  toggleMobileMenu(false);
+  trackPageView(`/app/${targetViewKey}`);
 }
 
 function openNewActionModal() {
@@ -331,9 +496,10 @@ function openNewActionModal() {
    -------------------------------------------------------------------------- */
 
 async function refreshDashboard() {
+  showTableLoading('dash-consultations-tbody', 4);
+  showTableLoading('dash-emt-tbody', 4);
   try {
-    const statsResponse = await fetch('/api/dashboard/stats');
-    const metrics = await statsResponse.json();
+    const metrics = await getJSON('/api/dashboard/stats');
 
     document.getElementById('stat-consultations').textContent = metrics.scheduled_consultations || 0;
     document.getElementById('stat-available-beds').textContent = metrics.available_beds || 0;
@@ -342,8 +508,7 @@ async function refreshDashboard() {
     document.getElementById('stat-employees').textContent = metrics.employees || 0;
     document.getElementById('stat-ambulances').textContent = metrics.available_ambulances || 0;
 
-    const consultationsResponse = await fetch('/api/consultations');
-    const appointments = await consultationsResponse.json();
+    const appointments = await getJSON('/api/consultations');
     const dashConTbody = document.getElementById('dash-consultations-tbody');
     dashConTbody.innerHTML = appointments.slice(0, 4).map((item) => `
       <tr>
@@ -352,10 +517,9 @@ async function refreshDashboard() {
         <td>${escapeHtml(item.REASON)}</td>
         <td><span class="status-pill status-${item.STATUS.toLowerCase()}">${item.STATUS}</span></td>
       </tr>
-    `).join('') || '<tr><td colspan="4" class="text-muted">No scheduled appointments.</td></tr>';
+    `).join('') || `<tr><td colspan="4">${stateBlock('fa-calendar-xmark', 'No appointments yet', 'Book one with “Book Appointment” at the top of the page.')}</td></tr>`;
 
-    const emtResponse = await fetch('/api/emt');
-    const ambulances = await emtResponse.json();
+    const ambulances = await getJSON('/api/emt');
     const dashEmtTbody = document.getElementById('dash-emt-tbody');
     dashEmtTbody.innerHTML = ambulances.slice(0, 4).map((amb) => `
       <tr>
@@ -364,9 +528,10 @@ async function refreshDashboard() {
         <td>${escapeHtml(amb.DRIVER_NAME)}</td>
         <td><span class="status-pill status-${amb.STATUS.toLowerCase()}">${amb.STATUS}</span></td>
       </tr>
-    `).join('') || '<tr><td colspan="4">No ambulances found.</td></tr>';
+    `).join('') || `<tr><td colspan="4">${stateBlock('fa-truck-medical', 'No ambulances registered')}</td></tr>`;
   } catch (err) {
-    console.error('Error loading dashboard statistics:', err);
+    tableMessage('dash-consultations-tbody', 4, 'fa-circle-exclamation', "Couldn't load the dashboard", err.message, 'refreshDashboard');
+    tableMessage('dash-emt-tbody', 4, 'fa-circle-exclamation', "Couldn't load the fleet status", err.message, 'refreshDashboard');
   }
 }
 
@@ -375,12 +540,16 @@ async function refreshDashboard() {
    -------------------------------------------------------------------------- */
 
 async function loadWardBeds() {
+  const container = document.getElementById('ward-sections-container');
+  container.innerHTML = stateBlock('spinner', 'Loading beds…');
   try {
     const response = await fetch('/api/beds');
+    if (!response.ok) throw new Error((await response.json()).error);
     hospitalBedsCache = await response.json();
     renderBedsMatrix(hospitalBedsCache);
+    if (!hospitalBedsCache.length) container.innerHTML = stateBlock('fa-bed', 'No beds set up yet');
   } catch (err) {
-    notifyUser('Failed to load ward beds layout', 'error');
+    container.innerHTML = stateBlock('fa-circle-exclamation', "Couldn't load the bed map", err.message, 'loadWardBeds');
   }
 }
 
@@ -541,9 +710,9 @@ async function handleAssignBed(event) {
    -------------------------------------------------------------------------- */
 
 async function loadPharmacyInventory() {
+  showTableLoading('pharmacy-tbody', 5);
   try {
-    const response = await fetch('/api/pharmacy');
-    pharmacyInventoryCache = await response.json();
+    pharmacyInventoryCache = await getJSON('/api/pharmacy');
     const tableBody = document.getElementById('pharmacy-tbody');
     const isStaff = activeUser && activeUser.role === 'staff';
 
@@ -579,9 +748,9 @@ async function loadPharmacyInventory() {
           </td>
         </tr>
       `;
-    }).join('') || '<tr><td colspan="5">Pharmacy catalog is empty.</td></tr>';
+    }).join('') || `<tr><td colspan="5">${stateBlock('fa-pills', 'The pharmacy catalog is empty', isStaff ? 'Add a medicine with “Restock Medicine”.' : 'Please check back later.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load pharmacy catalog', 'error');
+    tableMessage('pharmacy-tbody', 5, 'fa-circle-exclamation', "Couldn't load the pharmacy catalog", err.message, 'loadPharmacyInventory');
   }
 }
 
@@ -684,9 +853,9 @@ async function promptStockUpdate(medicineName, currentStock) {
    -------------------------------------------------------------------------- */
 
 async function loadDoctorsRegistry() {
+  showTableLoading('employees-tbody', 7);
   try {
-    const response = await fetch('/api/employees');
-    const doctorsList = await response.json();
+    const doctorsList = await getJSON('/api/employees');
     const tableBody = document.getElementById('employees-tbody');
 
     tableBody.innerHTML = doctorsList.map((doc) => `
@@ -703,9 +872,9 @@ async function loadDoctorsRegistry() {
           </button>
         </td>
       </tr>
-    `).join('') || '<tr><td colspan="7">No medical staff found.</td></tr>';
+    `).join('') || `<tr><td colspan="7">${stateBlock('fa-user-doctor', 'No doctors on record yet', 'Add one with “Add Doctor / Staff”.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load doctors list', 'error');
+    tableMessage('employees-tbody', 7, 'fa-circle-exclamation', "Couldn't load the doctors list", err.message, 'loadDoctorsRegistry');
   }
 }
 
@@ -757,9 +926,9 @@ async function deleteDoctorRecord(eid) {
    -------------------------------------------------------------------------- */
 
 async function loadPatientsRegistry() {
+  showTableLoading('patients-tbody', 9);
   try {
-    const response = await fetch('/api/patients');
-    const patientsList = await response.json();
+    const patientsList = await getJSON('/api/patients');
     const tableBody = document.getElementById('patients-tbody');
     const isStaff = activeUser && activeUser.role === 'staff';
 
@@ -781,9 +950,9 @@ async function loadPatientsRegistry() {
           </td>
         ` : ''}
       </tr>
-    `).join('') || '<tr><td colspan="9">No patient records available.</td></tr>';
+    `).join('') || `<tr><td colspan="9">${stateBlock('fa-hospital-user', 'No patient records yet', 'Add one with “Register Patient”.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load patient database', 'error');
+    tableMessage('patients-tbody', 9, 'fa-circle-exclamation', "Couldn't load patient records", err.message, 'loadPatientsRegistry');
   }
 }
 
@@ -835,9 +1004,9 @@ async function deletePatientRecord(pid) {
    -------------------------------------------------------------------------- */
 
 async function loadConsultationsRegistry() {
+  showTableLoading('consultations-tbody', 8);
   try {
-    const response = await fetch('/api/consultations');
-    const consultations = await response.json();
+    const consultations = await getJSON('/api/consultations');
     const tableBody = document.getElementById('consultations-tbody');
     const isStaff = activeUser && activeUser.role === 'staff';
 
@@ -860,9 +1029,9 @@ async function loadConsultationsRegistry() {
           </td>
         ` : ''}
       </tr>
-    `).join('') || '<tr><td colspan="8">No consultations scheduled.</td></tr>';
+    `).join('') || `<tr><td colspan="8">${stateBlock('fa-calendar-xmark', 'No consultations yet', 'Book one with “Book Consultation”.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load consultations list', 'error');
+    tableMessage('consultations-tbody', 8, 'fa-circle-exclamation', "Couldn't load consultations", err.message, 'loadConsultationsRegistry');
   }
 }
 
@@ -972,9 +1141,9 @@ async function handleCreatePrescription(event) {
    -------------------------------------------------------------------------- */
 
 async function loadPrescriptionsRegistry() {
+  document.getElementById('prescriptions-container').innerHTML = stateBlock('spinner', 'Loading prescriptions…');
   try {
-    const response = await fetch('/api/prescriptions');
-    const prescriptions = await response.json();
+    const prescriptions = await getJSON('/api/prescriptions');
     const container = document.getElementById('prescriptions-container');
 
     container.innerHTML = prescriptions.map((rx) => `
@@ -1001,9 +1170,9 @@ async function loadPrescriptionsRegistry() {
           <i class="fa-solid fa-download"></i> Download / Print Rx Slip
         </button>
       </div>
-    `).join('') || '<p class="text-muted">No prescriptions issued yet.</p>';
+    `).join('') || stateBlock('fa-file-prescription', 'No prescriptions yet', activeUser.role === 'staff' ? 'Issue one from a scheduled consultation with “Prescribe”.' : 'Prescriptions from your doctors will appear here.');
   } catch (err) {
-    notifyUser('Failed to load prescriptions', 'error');
+    document.getElementById('prescriptions-container').innerHTML = stateBlock('fa-circle-exclamation', "Couldn't load prescriptions", err.message, 'loadPrescriptionsRegistry');
   }
 }
 
@@ -1089,9 +1258,9 @@ async function openPrescriptionSlip(prescriptionId) {
    -------------------------------------------------------------------------- */
 
 async function loadAmbulanceFleet() {
+  showTableLoading('emt-tbody', 6);
   try {
-    const response = await fetch('/api/emt');
-    const fleet = await response.json();
+    const fleet = await getJSON('/api/emt');
     const tableBody = document.getElementById('emt-tbody');
     const isStaff = activeUser && activeUser.role === 'staff';
 
@@ -1112,9 +1281,9 @@ async function loadAmbulanceFleet() {
           </td>
         ` : ''}
       </tr>
-    `).join('') || '<tr><td colspan="6">No ambulances registered.</td></tr>';
+    `).join('') || `<tr><td colspan="6">${stateBlock('fa-truck-medical', 'No ambulances registered', 'Add one with “Add Ambulance”.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load EMT fleet', 'error');
+    tableMessage('emt-tbody', 6, 'fa-circle-exclamation', "Couldn't load the ambulance fleet", err.message, 'loadAmbulanceFleet');
   }
 }
 
@@ -1232,14 +1401,12 @@ async function populateConsultationSelectors() {
   const doctorSelect = document.getElementById('con-doctor-id');
 
   if (patientSelect) {
-    const pResponse = await fetch('/api/patients');
-    const patients = await pResponse.json();
+    const patients = await getJSON('/api/patients');
     patientSelect.innerHTML = patients.map((p) => `<option value="${p.PID}">${p.NAME} (${p.PID})</option>`).join('');
   }
 
   if (doctorSelect) {
-    const dResponse = await fetch('/api/employees');
-    const doctors = await dResponse.json();
+    const doctors = await getJSON('/api/employees');
     doctorSelect.innerHTML = doctors.map((d) => `<option value="${d.EID}">${d.NAME} - ${d.DEPARTMENT}</option>`).join('');
   }
 
@@ -1251,8 +1418,7 @@ async function populateConsultationSelectors() {
 
 async function populatePrescriptionConsultations() {
   const rxSelect = document.getElementById('rx-consultation-id');
-  const response = await fetch('/api/consultations');
-  const list = await response.json();
+  const list = await getJSON('/api/consultations');
   const scheduledList = list.filter((c) => c.STATUS === 'Scheduled');
   rxSelect.innerHTML = scheduledList.map((c) => `<option value="${c.CONSULTATION_ID}">${c.CONSULTATION_ID} - ${c.PATIENT_NAME} (Dr. ${c.DOCTOR_NAME})</option>`).join('') || '<option value="">No Active Consultations</option>';
 }
@@ -1267,8 +1433,7 @@ async function populateBedAllocationSelectors() {
   }
 
   if (patientSelect) {
-    const pResponse = await fetch('/api/patients');
-    const patients = await pResponse.json();
+    const patients = await getJSON('/api/patients');
     patientSelect.innerHTML = patients.map((p) => `<option value="${p.PID}">${p.NAME} (${p.PID}) - ${p.ISSUE || 'Patient'}</option>`).join('');
   }
 }
@@ -1326,6 +1491,7 @@ function escapeHtml(rawString) {
    -------------------------------------------------------------------------- */
 
 async function loadPatientProfile() {
+  showTableLoading('profile-purchases-tbody', 5);
   try {
     const response = await fetch('/api/patient/profile');
     const profile = await response.json();
@@ -1343,8 +1509,7 @@ async function loadPatientProfile() {
       document.getElementById('prof-bill-info').textContent = `Bill No: ${profile.BILL_NO || 'N/A'}`;
     }
 
-    const purchasesResponse = await fetch('/api/pharmacy/purchases');
-    const purchases = await purchasesResponse.json();
+    const purchases = await getJSON('/api/pharmacy/purchases');
     document.getElementById('profile-purchases-tbody').innerHTML = purchases.map((p) => `
       <tr>
         <td><code>${escapeHtml(p.PURCHASE_ID)}</code></td>
@@ -1353,13 +1518,11 @@ async function loadPatientProfile() {
         <td>₹${Number(p.TOTAL_PRICE).toFixed(2)}</td>
         <td>${escapeHtml(p.PURCHASE_DATE)}</td>
       </tr>
-    `).join('') || '<tr><td colspan="5" class="text-muted">No purchases yet.</td></tr>';
+    `).join('') || `<tr><td colspan="5">${stateBlock('fa-receipt', 'No purchases yet', 'Medicines you buy from Pharmacy Stock will appear here.')}</td></tr>`;
   } catch (err) {
     notifyUser('Failed to load your profile', 'error');
   }
 
-  document.getElementById('pref-marketing').checked = Boolean(activeUser && activeUser.marketing_opt_in);
-  loadMyPrivacyRequests();
 }
 
 async function handleUpdateProfile(event) {
@@ -1403,45 +1566,11 @@ async function handleMarketingPreference(optIn) {
   }
 }
 
-async function loadMyPrivacyRequests() {
-  const container = document.getElementById('my-privacy-requests');
-  if (!container) return;
-  const response = await fetch('/api/privacy/deletion-request');
-  const requests = response.ok ? await response.json() : [];
-  container.innerHTML = requests.map((r) => `
-    <p class="text-muted" style="font-size: 13px;">
-      Deletion request #${r.ID} (${escapeHtml(r.CREATED_AT)}): <strong>${escapeHtml(r.STATUS)}</strong>
-      ${r.RESOLUTION_NOTE ? ` &mdash; ${escapeHtml(r.RESOLUTION_NOTE)}` : ''}
-    </p>
-  `).join('');
-}
-
-async function handleDeletionRequest(event) {
-  event.preventDefault();
-  const response = await fetch('/api/privacy/deletion-request', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      password: document.getElementById('delete-password').value,
-      reason: document.getElementById('delete-reason').value.trim()
-    })
-  });
-  const data = await response.json();
-  if (response.ok) {
-    notifyUser(data.message, 'success');
-    document.getElementById('delete-password').value = '';
-    closeModal('modal-delete-account');
-    loadMyPrivacyRequests();
-  } else {
-    notifyUser(data.error, 'error');
-  }
-}
-
 async function loadPrivacyRequests() {
   const tbody = document.getElementById('privacy-requests-tbody');
+  showTableLoading('privacy-requests-tbody', 7);
   try {
-    const response = await fetch('/api/privacy/requests');
-    const requests = await response.json();
+    const requests = await getJSON('/api/privacy/requests');
     tbody.innerHTML = requests.map((r) => `
       <tr>
         <td>${r.ID}</td>
@@ -1457,9 +1586,9 @@ async function loadPrivacyRequests() {
           ` : '--'}
         </td>
       </tr>
-    `).join('') || '<tr><td colspan="7" class="text-muted">No privacy requests.</td></tr>';
+    `).join('') || `<tr><td colspan="7">${stateBlock('fa-user-lock', 'No privacy requests', 'Account deletions will be listed here.')}</td></tr>`;
   } catch (err) {
-    notifyUser('Failed to load privacy requests', 'error');
+    tableMessage('privacy-requests-tbody', 7, 'fa-circle-exclamation', "Couldn't load privacy requests", err.message, 'loadPrivacyRequests');
   }
 }
 
@@ -1543,4 +1672,287 @@ function openCookieSettings() {
   const prefs = document.getElementById('cookie-prefs');
   if (prefs.classList.contains('hidden')) toggleCookiePrefs();
   document.getElementById('cookie-pref-analytics').focus();
+}
+
+/* --------------------------------------------------------------------------
+   14. Email links, password reset & account settings
+   -------------------------------------------------------------------------- */
+
+let resetToken = null;
+
+// Links in emails land on "/?verified=1" or "/?reset=<token>".
+function handleEmailLinks() {
+  const params = new URLSearchParams(location.search);
+  if (params.has('verified')) {
+    if (params.get('verified') === '1') {
+      notifyUser('Thanks! Your email address is confirmed.', 'success');
+      if (activeUser) {
+        activeUser.email_verified = true;
+        updateVerifyBanner();
+      }
+    } else {
+      notifyUser('That confirmation link is invalid, already used or expired. Send a new one from Account & Privacy.', 'error');
+    }
+  }
+  if (params.has('reset')) {
+    resetToken = params.get('reset');
+    openModal('modal-reset-password');
+  }
+  if (params.has('verified') || params.has('reset')) {
+    // Remove the token from the address bar so it isn't kept in history or shared by accident.
+    history.replaceState(null, '', location.pathname);
+  }
+}
+
+async function postJSON(url, body, method = 'POST') {
+  const response = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || 'Something went wrong on our side. Please try again.');
+  return payload;
+}
+
+async function handleForgotPassword(event) {
+  event.preventDefault();
+  try {
+    const data = await postJSON('/api/auth/forgot-password', { identifier: document.getElementById('forgot-identifier').value.trim() });
+    closeModal('modal-forgot-password');
+    notifyUser(data.message, 'success');
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+async function handleResetPassword(event) {
+  event.preventDefault();
+  const password = document.getElementById('reset-new-password').value;
+  if (password !== document.getElementById('reset-confirm-password').value) {
+    notifyUser("The two passwords don't match.", 'error');
+    return;
+  }
+  try {
+    const data = await postJSON('/api/auth/reset-password', { token: resetToken, password });
+    resetToken = null;
+    closeModal('modal-reset-password');
+    activeUser = null;
+    renderUnauthenticatedView();
+    notifyUser(data.message, 'success');
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+async function resendVerification() {
+  try {
+    const data = await postJSON('/api/auth/resend-verification');
+    notifyUser(data.message, 'success');
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+function loadAccountPage() {
+  document.getElementById('account-email').value = activeUser.email || '';
+  const status = document.getElementById('account-email-status');
+  status.textContent = !activeUser.email ? 'Not set' : activeUser.email_verified ? 'Confirmed' : 'Not confirmed';
+  status.className = `status-pill ${activeUser.email_verified ? 'status-completed' : 'status-maintenance'}`;
+  document.getElementById('account-resend-btn').classList.toggle('hidden', !activeUser.email || activeUser.email_verified);
+  document.getElementById('pref-marketing').checked = Boolean(activeUser.marketing_opt_in);
+}
+
+async function handleChangeEmail(event) {
+  event.preventDefault();
+  try {
+    const email = document.getElementById('account-email').value.trim();
+    const data = await postJSON('/api/account/email', { email }, 'PUT');
+    notifyUser(data.message, 'success');
+    if (email.toLowerCase() !== (activeUser.email || '')) {
+      activeUser.email = email.toLowerCase();
+      activeUser.email_verified = false;
+    }
+    loadAccountPage();
+    updateVerifyBanner();
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+async function handleChangePassword(event) {
+  event.preventDefault();
+  const newPassword = document.getElementById('account-new-password').value;
+  if (newPassword !== document.getElementById('account-confirm-password').value) {
+    notifyUser("The two new passwords don't match.", 'error');
+    return;
+  }
+  try {
+    const data = await postJSON('/api/account/password', {
+      current_password: document.getElementById('account-current-password').value,
+      new_password: newPassword
+    });
+    event.target.reset();
+    notifyUser(data.message, 'success');
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+async function handleDeleteAccount(event) {
+  event.preventDefault();
+  try {
+    const data = await postJSON('/api/account/delete', {
+      password: document.getElementById('delete-password').value,
+      confirm: document.getElementById('delete-confirm').value,
+      reason: document.getElementById('delete-reason').value.trim()
+    });
+    event.target.reset();
+    closeModal('modal-delete-account');
+    activeUser = null;
+    renderUnauthenticatedView();
+    notifyUser(data.message, 'success');
+  } catch (err) {
+    notifyUser(err.message, 'error');
+  }
+}
+
+/* --------------------------------------------------------------------------
+   15. System page (staff): analytics, error log, backups
+   -------------------------------------------------------------------------- */
+
+async function loadSystemPage() {
+  const totals = document.getElementById('analytics-totals');
+  const pages = document.getElementById('analytics-pages');
+  pages.innerHTML = stateBlock('spinner', 'Loading analytics…');
+  showTableLoading('error-log-tbody', 4);
+
+  try {
+    const summary = await getJSON('/api/analytics/summary');
+    totals.innerHTML = `
+      <div><span class="analytics-number">${summary.total_views}</span><span class="analytics-label">page views</span></div>
+      <div><span class="analytics-number">${summary.signups}</span><span class="analytics-label">new accounts</span></div>`;
+    const top = summary.by_page[0] ? summary.by_page[0].VIEWS : 0;
+    pages.innerHTML = summary.by_page.length ? `
+      <ul class="bar-list" aria-label="Page views by page">
+        ${summary.by_page.map((row) => `
+          <li>
+            <span class="bar-label">${escapeHtml(row.PATH)}</span>
+            <span class="bar-track"><span class="bar-fill" style="width: ${Math.max(4, Math.round((row.VIEWS / top) * 100))}%"></span></span>
+            <span class="bar-value">${row.VIEWS}</span>
+          </li>`).join('')}
+      </ul>` : stateBlock('fa-chart-line', 'No page views yet', 'Numbers appear here as people use the site.');
+  } catch (err) {
+    pages.innerHTML = stateBlock('fa-circle-exclamation', "Couldn't load analytics", err.message, 'loadSystemPage');
+  }
+
+  try {
+    const errors = await getJSON('/api/errors');
+    document.getElementById('error-log-tbody').innerHTML = errors.map((e) => `
+      <tr>
+        <td><small>${escapeHtml(e.CREATED_AT)}</small></td>
+        <td><span class="status-pill ${e.SOURCE === 'server' ? 'status-dispatched' : 'status-maintenance'}">${e.SOURCE === 'server' ? 'Server' : 'Browser'}</span></td>
+        <td><code>${escapeHtml(e.PATH || '--')}</code></td>
+        <td>
+          <details>
+            <summary>${escapeHtml(e.MESSAGE)}</summary>
+            <pre class="error-detail">${escapeHtml(e.DETAIL || '')}</pre>
+          </details>
+        </td>
+      </tr>`).join('') || `<tr><td colspan="4">${stateBlock('fa-circle-check', 'No errors recorded', 'Server and browser errors will appear here.')}</td></tr>`;
+  } catch (err) {
+    tableMessage('error-log-tbody', 4, 'fa-circle-exclamation', "Couldn't load the error log", err.message, 'loadSystemPage');
+  }
+}
+
+async function clearErrorLog() {
+  if (!confirm('Clear all entries from the error log?')) return;
+  const response = await fetch('/api/errors', { method: 'DELETE' });
+  const data = await response.json();
+  notifyUser(response.ok ? data.message : data.error, response.ok ? 'success' : 'error');
+  loadSystemPage();
+}
+
+/* --------------------------------------------------------------------------
+   16. Welcome tour (onboarding)
+   -------------------------------------------------------------------------- */
+
+let onboardingIndex = 0;
+
+function onboardingSteps() {
+  if (activeUser.role === 'staff') {
+    return [
+      { icon: 'fa-staff-snake', title: `Welcome, ${activeUser.name}`, body: 'Asclepio brings beds, patients, consultations, prescriptions, pharmacy and ambulances together. This quick tour shows where things are.' },
+      { icon: 'fa-bed-pulse', title: 'Ward bed map', body: 'See every bed at a glance. Select an available bed to allocate a patient, or an occupied one to discharge.', action: 'Open the bed map', view: 'beds' },
+      { icon: 'fa-calendar-check', title: 'Consultations & prescriptions', body: 'Book appointments for patients, then issue a digital prescription straight from a scheduled consultation.', action: 'Open consultations', view: 'consultations' },
+      { icon: 'fa-server', title: 'Privacy & System', body: 'Privacy Requests lists account deletions. System shows site analytics, the error log and database backups.', action: 'Open System', view: 'system' }
+    ];
+  }
+  return [
+    { icon: 'fa-staff-snake', title: `Welcome, ${activeUser.name}`, body: 'Asclepio lets you book appointments, reserve a bed, see your prescriptions and order medicines. Three quick steps get you set up.' },
+    activeUser.email_verified
+      ? { icon: 'fa-envelope-circle-check', title: 'Email confirmed', body: 'Your email address is confirmed, so you can reset your password if you ever forget it.' }
+      : { icon: 'fa-envelope', title: 'Confirm your email', body: `We sent a link to ${activeUser.email || 'your email address'}. Confirming it lets you reset your password if you forget it.`, action: 'Resend the link', run: resendVerification },
+    { icon: 'fa-notes-medical', title: 'Complete your health profile', body: 'Add your age, blood group, allergies and medical history so your doctors have what they need.', action: 'Open my profile', view: 'profile' },
+    { icon: 'fa-calendar-plus', title: 'Book your first appointment', body: `Choose a specialist and a time. The fee (₹${Number(siteInfo.consultation_fee || 0).toFixed(2)}) is shown before you confirm.`, action: 'Book an appointment', run: () => { switchView('consultations'); openModal('modal-add-consultation'); } }
+  ];
+}
+
+function startOnboarding() {
+  onboardingIndex = 0;
+  renderOnboardingStep();
+  openModal('modal-onboarding');
+}
+
+function renderOnboardingStep() {
+  const steps = onboardingSteps();
+  const step = steps[onboardingIndex];
+  document.getElementById('onboarding-step').innerHTML = `
+    <div class="onboarding-icon" aria-hidden="true"><i class="fa-solid ${step.icon}"></i></div>
+    <p class="onboarding-count">Step ${onboardingIndex + 1} of ${steps.length}</p>
+    <h4 class="onboarding-title">${escapeHtml(step.title)}</h4>
+    <p class="onboarding-body">${escapeHtml(step.body)}</p>`;
+  document.getElementById('onboarding-dots').innerHTML = steps.map((_, i) => `<span class="${i === onboardingIndex ? 'active' : ''}"></span>`).join('');
+  document.getElementById('onboarding-back').classList.toggle('hidden', onboardingIndex === 0);
+  const actionButton = document.getElementById('onboarding-action');
+  actionButton.textContent = step.action || '';
+  actionButton.classList.toggle('hidden', !step.action);
+  document.getElementById('onboarding-next').textContent = onboardingIndex === steps.length - 1 ? 'Finish' : 'Next';
+}
+
+function onboardingStep(direction) {
+  const steps = onboardingSteps();
+  if (direction > 0 && onboardingIndex === steps.length - 1) {
+    finishOnboarding();
+    return;
+  }
+  onboardingIndex = Math.min(Math.max(onboardingIndex + direction, 0), steps.length - 1);
+  renderOnboardingStep();
+}
+
+async function onboardingAction() {
+  const step = onboardingSteps()[onboardingIndex];
+  if (step.view) {
+    await finishOnboarding();
+    switchView(step.view);
+  } else if (step.run) {
+    if (step.run === resendVerification) {
+      step.run();
+    } else {
+      await finishOnboarding();
+      step.run();
+    }
+  }
+}
+
+async function finishOnboarding() {
+  closeModal('modal-onboarding');
+  if (activeUser && !activeUser.onboarded) {
+    activeUser.onboarded = true;
+    try {
+      await fetch('/api/account/onboarded', { method: 'POST' });
+    } catch (err) {
+      // Not critical: the tour may simply show again next time.
+    }
+  }
 }

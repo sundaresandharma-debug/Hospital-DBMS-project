@@ -27,6 +27,11 @@ MIGRATION_COLUMNS = {
         ("IS_MINOR", "INTEGER DEFAULT 0"),
         ("GUARDIAN_NAME", "TEXT"),
         ("GUARDIAN_CONSENT_AT", "TIMESTAMP"),
+        ("EMAIL", "TEXT"),
+        ("EMAIL_VERIFIED_AT", "TIMESTAMP"),
+        ("ONBOARDED_AT", "TIMESTAMP"),
+        ("FAILED_LOGINS", "INTEGER DEFAULT 0"),
+        ("LOCKED_UNTIL", "TEXT"),
     ],
     "PATIENTS": [
         ("GUARDIAN_NAME", "TEXT"),
@@ -41,6 +46,8 @@ def apply_migrations(conn):
         for column, definition in columns:
             if column not in existing:
                 cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    # One account per email address (accounts created before emails existed have none)
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS IDX_USER_EMAIL ON USER_DATA(EMAIL) WHERE EMAIL IS NOT NULL")
     conn.commit()
 
 
@@ -238,6 +245,50 @@ def init_db():
     """
     )
 
+    # 12. One-time links for email verification and password reset (only hashes are stored)
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS AUTH_TOKENS (
+            TOKEN_HASH TEXT PRIMARY KEY,
+            USERNAME TEXT NOT NULL,
+            PURPOSE TEXT NOT NULL CHECK (PURPOSE IN ('verify_email', 'reset_password')),
+            EXPIRES_AT TEXT NOT NULL,
+            USED_AT TIMESTAMP,
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
+    # 13. Rate-limit events (sliding window per key)
+    cursor.execute("CREATE TABLE IF NOT EXISTS RATE_EVENTS (KEY TEXT NOT NULL, AT REAL NOT NULL)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS IDX_RATE_EVENTS ON RATE_EVENTS(KEY, AT)")
+
+    # 14. First-party, cookieless analytics: page-view counts per day and page, nothing per visitor
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS PAGE_VIEWS (
+            DAY TEXT NOT NULL,
+            PATH TEXT NOT NULL,
+            VIEWS INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (DAY, PATH)
+        )
+    """
+    )
+
+    # 15. Error tracking for server exceptions and browser errors
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ERROR_LOG (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            SOURCE TEXT NOT NULL CHECK (SOURCE IN ('server', 'client')),
+            MESSAGE TEXT NOT NULL,
+            DETAIL TEXT,
+            PATH TEXT,
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
     conn.commit()
     apply_migrations(conn)
     seed_data(conn)
@@ -250,8 +301,10 @@ def seed_data(conn):
     # Seed Default User Accounts
     cursor.execute("SELECT COUNT(*) FROM USER_DATA")
     if cursor.fetchone()[0] == 0:
+        # Demo accounts use reserved example.com addresses and are pre-verified and onboarded.
         cursor.executemany(
-            "INSERT INTO USER_DATA (USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO) VALUES (?, ?, ?, ?, ?)",
+            """INSERT INTO USER_DATA (USERNAME, PASSWORD, ROLE, NAME, MOBILE_NO, EMAIL, EMAIL_VERIFIED_AT, ONBOARDED_AT)
+               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
             [
                 (
                     "admin",
@@ -259,6 +312,7 @@ def seed_data(conn):
                     "staff",
                     "Dr. Eleanor Vance (Chief Medical Officer)",
                     "9876543210",
+                    "admin@example.com",
                 ),
                 (
                     "doctor_raj",
@@ -266,6 +320,7 @@ def seed_data(conn):
                     "staff",
                     "Dr. Rajesh Sharma",
                     "9876543211",
+                    "doctor_raj@example.com",
                 ),
                 (
                     "patient_john",
@@ -273,6 +328,7 @@ def seed_data(conn):
                     "patient",
                     "Johnathan Doe",
                     "9123456780",
+                    "patient_john@example.com",
                 ),
             ],
         )

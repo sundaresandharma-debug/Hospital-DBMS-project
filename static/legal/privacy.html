@@ -24,34 +24,37 @@
   </header>
   <main id="main" class="legal-main" tabindex="-1">
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: 16 October 2026</p>
+    <p class="updated">Last updated: 17 October 2026</p>
     <p class="review-notice" role="note">Operator note: this document describes how the Asclepio software behaves. Text in [square brackets] must be completed, and the whole document reviewed by qualified legal counsel for your jurisdiction, before launch.</p>
 
     <p>This policy explains what personal data the Asclepio portal collects, why, how long we keep it, and the rights you have. The data controller (data fiduciary) is the hospital that operates this portal.</p>
 
     <h2 id="collect">1. What we collect and why</h2>
-    <p>We collect only what is needed to run the portal. We do not ask for email addresses, government IDs, payment card details or precise location.</p>
+    <p>We collect only what is needed to run the portal. We do not ask for government IDs, payment card details or precise location.</p>
     <div class="table-wrap">
     <table>
       <caption class="sr-only">Personal data collected</caption>
       <thead><tr><th scope="col">Data</th><th scope="col">Purpose</th><th scope="col">Legal basis</th></tr></thead>
       <tbody>
-        <tr><td>Username, password (stored only as a salted hash), full name, mobile number, account role</td><td>Create and secure your account; contact you about your care</td><td>Contract; consent</td></tr>
+        <tr><td>Username, password (stored only as a salted hash), full name, mobile number, email address, account role</td><td>Create and secure your account; confirm your email; send password-reset links and account notices; contact you about your care</td><td>Contract; consent</td></tr>
         <tr><td>Record of your consents: time you accepted the Terms and this policy, policy version, health-data consent, optional updates opt-in</td><td>Prove and honour your choices</td><td>Legal obligation</td></tr>
         <tr><td>Age group (18+ or under 18) and, for children, the parent/guardian's name and consent time</td><td>Obtain verifiable parental consent for children's data</td><td>Legal obligation; consent of parent/guardian</td></tr>
         <tr><td>Health information you or your clinicians enter: age, gender, blood group, allergies, symptoms, medical history, consultations, diagnoses, prescriptions, bed reservations</td><td>Provide medical care and keep accurate medical records</td><td>Explicit consent; medical-record law</td></tr>
         <tr><td>Medicine orders (item, quantity, price, date)</td><td>Fulfil orders and keep billing records</td><td>Contract; tax/accounting law</td></tr>
         <tr><td>Data deletion requests and how they were resolved</td><td>Handle your privacy rights and show we did</td><td>Legal obligation</td></tr>
+        <tr><td>Security records: failed sign-in counts, temporary lockouts, short-lived request counters by network address, and technical error reports</td><td>Protect accounts from password guessing and abuse, and fix faults</td><td>Legitimate interests; security obligations</td></tr>
+        <tr><td>Page-view counts per page and day (no cookies, nothing that identifies you)</td><td>Understand which parts of the portal are used</td><td>Legitimate interests</td></tr>
       </tbody>
     </table>
     </div>
-    <p>Optional health tips and hospital updates are sent only if you tick the opt-in box. You can change this at any time in <strong>My Medical Profile &rarr; Privacy &amp; My Data</strong>, and every such message includes an unsubscribe link.</p>
+    <p>Optional health tips and hospital updates are sent only if you tick the opt-in box. You can change this at any time in <strong>Account &amp; Privacy</strong>, and every such message includes an unsubscribe link.</p>
 
     <h2 id="who">2. Who can see your data</h2>
     <ul>
       <li><strong>Hospital staff</strong> with a staff account can see patient records to provide care. Staff accounts are created only by the hospital (self-registration requires an invite code).</li>
       <li><strong>Other patients</strong> never see your name or health details. The ward bed map shows other patients only as "Occupied".</li>
       <li><strong>Service providers:</strong> the portal is hosted by <span>[hosting provider, e.g. Vercel Inc.]</span>, which processes data on our behalf under a data processing agreement. The portal loads no third-party analytics, advertising, social media, font or icon services.</li>
+      <li><strong>Email:</strong> confirmation and password-reset emails are sent through <span>[email provider]</span>, which receives your email address, name and the link.</li>
       <li><strong>Authorities</strong> where the law requires it (for example, notifiable diseases or a court order).</li>
     </ul>
     <p>We do not sell your personal data or use it for targeted advertising.</p>
@@ -69,16 +72,16 @@
     <h2 id="rights">5. Your rights</h2>
     <p>Depending on where you live (including under India's Digital Personal Data Protection Act, 2023 and the EU/UK GDPR), you can:</p>
     <ul>
-      <li><strong>Access and portability</strong> &mdash; download everything we hold about you as a JSON file from <strong>My Medical Profile &rarr; Privacy &amp; My Data &rarr; Download my data</strong>.</li>
+      <li><strong>Access and portability</strong> &mdash; download everything we hold about you as a JSON file from <strong>Account &amp; Privacy &rarr; Download my data</strong>.</li>
       <li><strong>Correction</strong> &mdash; edit your details in My Medical Profile, or ask staff to correct clinical records.</li>
-      <li><strong>Deletion</strong> &mdash; use <strong>Request account deletion</strong>. We complete requests within 30 days. Your login and non-clinical personal data are erased; medical records we are legally required to keep are unlinked from your account and deleted when the retention period ends. You will see the outcome in your privacy panel.</li>
+      <li><strong>Deletion</strong> &mdash; use <strong>Account &amp; Privacy &rarr; Delete my account</strong>. It takes effect immediately: your login and non-clinical personal data are erased; medical records we are legally required to keep are unlinked from your account and deleted when the retention period ends.</li>
       <li><strong>Withdraw consent</strong> &mdash; for optional updates at any time; for health-data processing by requesting deletion (we may then be unable to provide online services).</li>
       <li><strong>Nominate</strong> someone to exercise your rights if you die or become incapacitated, by contacting our Grievance Officer.</li>
       <li><strong>Complain</strong> to our Grievance Officer (below) and, if unresolved, to the Data Protection Board of India or your local data protection authority.</li>
     </ul>
 
     <h2 id="security">6. Security</h2>
-    <p>Passwords are stored as salted hashes. Sign-in uses an HttpOnly session cookie that is sent only over HTTPS in production. Access to patient records is restricted by role, and patients can only open their own consultations and prescriptions. No method of transmission or storage is completely secure; if a breach affects you, we will notify you and the authorities as the law requires.</p>
+    <p>Passwords are stored as salted hashes, and email and password-reset links are single-use, expire, and are stored only in hashed form. Sign-in uses an HttpOnly session cookie that is sent only over HTTPS in production and expires after 8 hours. Repeated wrong passwords temporarily lock an account. Access to patient records is restricted by role, and patients can only open their own consultations and prescriptions. No method of transmission or storage is completely secure; if a breach affects you, we will notify you and the authorities as the law requires.</p>
 
     <h2 id="cookies">7. Cookies</h2>
     <p>We use one strictly necessary session cookie. See the <a href="/cookies">Cookie Policy</a>.</p>
