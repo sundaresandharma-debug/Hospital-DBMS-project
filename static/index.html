@@ -20,6 +20,36 @@
   <!-- AUTHENTICATION VIEW -->
   <main id="auth-screen" class="auth-wrapper" tabindex="-1">
     <div class="auth-brand-glow" aria-hidden="true"></div>
+    <div class="auth-layout">
+    <!-- Live hospital stats (aggregate counts only, no patient data) -->
+    <section class="auth-stats hidden" id="auth-stats" aria-labelledby="auth-stats-title">
+      <h2 id="auth-stats-title" class="sr-only">Hospital at a glance</h2>
+      <div class="auth-stat-card">
+        <div class="auth-stat-text">
+          <p class="auth-stat-title">Beds available</p>
+          <p class="auth-stat-value" id="pub-beds">0</p>
+          <p class="auth-stat-change"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <span id="pub-beds-meta">of 0 total</span></p>
+        </div>
+        <div class="auth-stat-icon icon-cyan" aria-hidden="true"><i class="fa-solid fa-bed-pulse"></i></div>
+      </div>
+      <div class="auth-stat-card">
+        <div class="auth-stat-text">
+          <p class="auth-stat-title">Medical specialists</p>
+          <p class="auth-stat-value" id="pub-doctors">0</p>
+          <p class="auth-stat-change"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <span id="pub-doctors-meta">across 0 departments</span></p>
+        </div>
+        <div class="auth-stat-icon icon-purple" aria-hidden="true"><i class="fa-solid fa-user-doctor"></i></div>
+      </div>
+      <div class="auth-stat-card">
+        <div class="auth-stat-text">
+          <p class="auth-stat-title">Ambulances ready</p>
+          <p class="auth-stat-value" id="pub-ambulances">0</p>
+          <p class="auth-stat-change"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <span id="pub-ambulances-meta">of 0 in the fleet</span></p>
+        </div>
+        <div class="auth-stat-icon icon-amber" aria-hidden="true"><i class="fa-solid fa-truck-medical"></i></div>
+      </div>
+    </section>
+
     <div class="auth-card glass-panel">
       <div class="auth-header">
         <div class="logo-circle" aria-hidden="true"><i class="fa-solid fa-staff-snake" aria-hidden="true"></i></div>
@@ -163,6 +193,7 @@
           <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Create Account
         </button>
       </form>
+    </div>
     </div>
 
     <footer class="site-footer auth-footer" aria-label="Legal information">
