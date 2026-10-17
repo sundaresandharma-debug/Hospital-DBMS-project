@@ -1,9 +1,9 @@
 """Outgoing email helpers.
 
-The portal does not send email today. Any email added later must be built with
-``build_marketing_email`` (newsletters, health tips, announcements) or
-``build_transactional_email`` (appointment confirmations, password resets) so
-that every non-essential message carries a working unsubscribe link and the
+The portal sends account emails (email confirmation and password reset) with
+``build_transactional_email``. Any email added later must use it, or
+``build_marketing_email`` for newsletters, health tips and announcements, so that
+every non-essential message carries a working unsubscribe link and the
 RFC 2369 / RFC 8058 ``List-Unsubscribe`` headers that mail providers require.
 """
 
