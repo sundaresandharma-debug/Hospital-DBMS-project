@@ -11,6 +11,7 @@ let siteInfo = { staff_signup_enabled: false, consultation_fee: 0 };
 // Initialize app when DOM is fully loaded
 document.addEventListener('DOMContentLoaded', async () => {
   initCookieConsent();
+  loadPublicStats();
   await loadSiteInfo();
   await verifySessionState();
   if (activeUser) {
@@ -91,6 +92,24 @@ async function loadSiteInfo() {
   document.querySelectorAll('.con-fee-display').forEach((el) => {
     el.textContent = `₹${Number(siteInfo.consultation_fee || 0).toFixed(2)}`;
   });
+}
+
+// Live stat cards beside the sign-in box (aggregate counts only)
+async function loadPublicStats() {
+  try {
+    const response = await fetch('/api/public/stats');
+    if (!response.ok) return;
+    const stats = await response.json();
+    document.getElementById('pub-beds').textContent = stats.available_beds;
+    document.getElementById('pub-beds-meta').textContent = `of ${stats.total_beds} total`;
+    document.getElementById('pub-doctors').textContent = stats.specialists;
+    document.getElementById('pub-doctors-meta').textContent = `across ${stats.departments} departments`;
+    document.getElementById('pub-ambulances').textContent = stats.ambulances_ready;
+    document.getElementById('pub-ambulances-meta').textContent = `of ${stats.total_ambulances} in the fleet`;
+    document.getElementById('auth-stats').classList.remove('hidden');
+  } catch (err) {
+    // The cards stay hidden if stats can't be loaded; sign-in still works.
+  }
 }
 
 function updateSignupRole() {

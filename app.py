@@ -129,6 +129,28 @@ def site_info():
     })
 
 
+# Aggregate counts for the sign-in page. Public, so it must never include personal data.
+@app.route("/api/public/stats", methods=["GET"])
+def public_stats():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    def count(query):
+        cursor.execute(query)
+        return cursor.fetchone()[0]
+
+    stats = {
+        "available_beds": count("SELECT COUNT(*) FROM BEDS WHERE STATUS = 'Available'"),
+        "total_beds": count("SELECT COUNT(*) FROM BEDS"),
+        "specialists": count("SELECT COUNT(*) FROM EMPLOYEES"),
+        "departments": count("SELECT COUNT(DISTINCT DEPARTMENT) FROM EMPLOYEES"),
+        "ambulances_ready": count("SELECT COUNT(*) FROM EMT E LEFT JOIN EMT_STATUS S ON E.VNO = S.VNO WHERE COALESCE(S.STATUS, 'Available') = 'Available'"),
+        "total_ambulances": count("SELECT COUNT(*) FROM EMT"),
+    }
+    conn.close()
+    return jsonify(stats)
+
+
 # ================= AUTHENTICATION (EXPLICIT ERROR PROMPTS) =================
 
 @app.route("/api/auth/register", methods=["POST"])
