@@ -36,3 +36,4 @@ The Font Awesome attribution comment at the top of each CSS file must be kept, a
 | Provider | Purpose | Data processed |
 |---|---|---|
 | Vercel Inc. (per `vercel.json`) | Hosting | All application data and request logs. A data processing agreement must be in place before launch. |
+| Your SMTP email provider (optional, set with `SMTP_*`) | Sending confirmation and password-reset emails | Recipient email address, name and the one-time link. Needs a data processing agreement too. |

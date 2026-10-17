@@ -70,8 +70,8 @@
       <!-- Login Form -->
       <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="tab-login" onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label for="login-username"><i class="fa-solid fa-user" aria-hidden="true"></i> Username</label>
-          <input type="text" id="login-username" placeholder="e.g. admin or patient_john" required autocomplete="username" />
+          <label for="login-username"><i class="fa-solid fa-user" aria-hidden="true"></i> Username or email</label>
+          <input type="text" id="login-username" placeholder="e.g. admin or you@example.com" required autocomplete="username" autocapitalize="none" spellcheck="false" />
         </div>
         <div class="form-group">
           <label for="login-password"><i class="fa-solid fa-lock" aria-hidden="true"></i> Password</label>
@@ -81,6 +81,7 @@
               <i class="fa-solid fa-eye" aria-hidden="true" id="login-eye-icon"></i>
             </button>
           </div>
+          <button type="button" class="link-button forgot-link" onclick="openModal('modal-forgot-password')">Forgot password?</button>
         </div>
         <button type="submit" class="btn btn-primary btn-block">
           <span>Log In to Portal</span> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
@@ -130,24 +131,32 @@
           </div>
           <div class="form-group">
             <label for="signup-mobile"><i class="fa-solid fa-phone" aria-hidden="true"></i> Mobile Number</label>
-            <input type="tel" id="signup-mobile" placeholder="9876543210" required autocomplete="tel" />
+            <input type="tel" id="signup-mobile" placeholder="9876543210" required autocomplete="tel" inputmode="tel" pattern="\+?[0-9 \-]{10,18}" title="10–15 digits, for example 9876543210" />
           </div>
         </div>
 
         <div class="form-grid-2">
           <div class="form-group">
             <label for="signup-username"><i class="fa-solid fa-user" aria-hidden="true"></i> Pick Username</label>
-            <input type="text" id="signup-username" placeholder="janedoe" required autocomplete="username" />
+            <input type="text" id="signup-username" placeholder="janedoe" required autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="30" pattern="[a-zA-Z0-9_.]{3,30}" title="3–30 letters, numbers, dots or underscores" aria-describedby="signup-username-hint" />
+            <small class="field-hint" id="signup-username-hint">3–30 letters, numbers, dots or underscores</small>
           </div>
           <div class="form-group">
             <label for="signup-password"><i class="fa-solid fa-lock" aria-hidden="true"></i> Password</label>
             <div class="password-input-wrapper">
-              <input type="password" id="signup-password" placeholder="At least 6 chars" required minlength="6" autocomplete="new-password" />
+              <input type="password" id="signup-password" placeholder="At least 8 characters" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="signup-password-hint" />
               <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('signup-password', 'signup-eye-icon', this)" aria-label="Show password" aria-pressed="false">
                 <i class="fa-solid fa-eye" aria-hidden="true" id="signup-eye-icon"></i>
               </button>
             </div>
+            <small class="field-hint" id="signup-password-hint">At least 8 characters</small>
           </div>
+        </div>
+
+        <div class="form-group">
+          <label for="signup-email"><i class="fa-solid fa-envelope" aria-hidden="true"></i> Email address</label>
+          <input type="email" id="signup-email" placeholder="you@example.com" required autocomplete="email" maxlength="254" aria-describedby="signup-email-hint" />
+          <small class="field-hint" id="signup-email-hint">We'll send a link to confirm it. Used for password resets and account notices.</small>
         </div>
 
         <fieldset class="consent-fieldset">
@@ -221,7 +230,7 @@
         </div>
       </div>
 
-      <nav class="sidebar-nav" aria-label="Main">
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Main">
         <button class="nav-item active" onclick="switchView('dashboard')">
           <i class="fa-solid fa-chart-pie" aria-hidden="true"></i> <span>Dashboard</span>
         </button>
@@ -253,6 +262,12 @@
         <button class="nav-item staff-only" onclick="switchView('privacy')">
           <i class="fa-solid fa-user-lock" aria-hidden="true"></i> <span>Privacy Requests</span>
         </button>
+        <button class="nav-item staff-only" onclick="switchView('system')">
+          <i class="fa-solid fa-server" aria-hidden="true"></i> <span>System</span>
+        </button>
+        <button class="nav-item" onclick="switchView('account')">
+          <i class="fa-solid fa-user-gear" aria-hidden="true"></i> <span>Account &amp; Privacy</span>
+        </button>
       </nav>
 
       <div class="sidebar-user">
@@ -270,7 +285,17 @@
     <!-- Main Content Area -->
     <main class="main-content" id="main-content" tabindex="-1">
       <!-- Top Navbar -->
+      <div id="verify-banner" class="verify-banner hidden" role="status">
+        <i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i>
+        <span id="verify-banner-text">Please confirm your email address using the link we sent you.</span>
+        <button type="button" class="btn btn-sm btn-outline" onclick="resendVerification()">Resend link</button>
+        <button type="button" class="link-button" onclick="switchView('account')">Change email</button>
+      </div>
+
       <header class="top-nav glass-panel">
+        <button type="button" class="btn-menu" id="btn-menu" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar-nav" onclick="toggleMobileMenu()">
+          <i class="fa-solid fa-bars" aria-hidden="true"></i>
+        </button>
         <div class="page-title-wrap">
           <h1 id="page-title">Hospital Overview</h1>
           <p id="page-subtitle">Real-time clinical metrics & status</p>
@@ -345,7 +370,7 @@
                 <h3><i class="fa-solid fa-stethoscope" aria-hidden="true"></i> Recent Consultations</h3>
                 <button class="btn btn-sm btn-outline" onclick="switchView('consultations')">View All</button>
               </div>
-              <div class="table-responsive">
+              <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
                 <table class="modern-table">
                   <thead>
                     <tr>
@@ -365,7 +390,7 @@
                 <h3><i class="fa-solid fa-truck-fast" aria-hidden="true"></i> Emergency Fleet Status</h3>
                 <button class="btn btn-sm btn-outline" onclick="switchView('emt')">Fleet Board</button>
               </div>
-              <div class="table-responsive">
+              <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
                 <table class="modern-table">
                   <thead>
                     <tr>
@@ -412,7 +437,7 @@
                 <i class="fa-solid fa-user-plus" aria-hidden="true"></i> Add Doctor / Staff
               </button>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table id="employees-table" class="modern-table">
                 <thead>
                   <tr>
@@ -443,7 +468,7 @@
                 <i class="fa-solid fa-plus" aria-hidden="true"></i> Register Patient
               </button>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table id="patients-table" class="modern-table">
                 <thead>
                   <tr>
@@ -550,7 +575,7 @@
                 <h3><i class="fa-solid fa-receipt" aria-hidden="true"></i> Medicine Purchase History</h3>
                 <span class="badge-role" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8;">Receipt Log</span>
               </div>
-              <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+              <div class="table-responsive" style="max-height: 480px; overflow-y: auto;" tabindex="0" role="region" aria-label="Scrollable table">
                 <table class="modern-table">
                   <thead>
                     <tr>
@@ -568,24 +593,6 @@
               </div>
             </div>
 
-            <!-- Privacy controls: export, communication preferences, deletion -->
-            <div class="card glass-panel privacy-card">
-              <div class="card-head">
-                <h3><i class="fa-solid fa-user-lock" aria-hidden="true"></i> Privacy & My Data</h3>
-              </div>
-              <p>Download a copy of everything we store about you, change your communication preferences, or ask us to delete your account. See our <a class="link-inline" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
-              <div class="consent-group" style="margin-top: 12px;">
-                <label class="consent-item">
-                  <input type="checkbox" id="pref-marketing" onchange="handleMarketingPreference(this.checked)" />
-                  <span>Receive optional health tips and hospital updates</span>
-                </label>
-              </div>
-              <div class="privacy-actions">
-                <a class="btn btn-outline" href="/api/privacy/export" download><i class="fa-solid fa-download" aria-hidden="true"></i> Download my data (JSON)</a>
-                <button type="button" class="btn btn-danger-sm" onclick="openModal('modal-delete-account')"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Request account deletion</button>
-              </div>
-              <div id="my-privacy-requests" style="margin-top: 12px;" aria-live="polite"></div>
-            </div>
           </div>
         </section>
 
@@ -601,7 +608,7 @@
                 <i class="fa-solid fa-calendar-plus" aria-hidden="true"></i> Book Consultation
               </button>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table id="consultations-table" class="modern-table">
                 <thead>
                   <tr>
@@ -649,7 +656,7 @@
                 <i class="fa-solid fa-plus" aria-hidden="true"></i> Restock Medicine
               </button>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table id="pharmacy-table" class="modern-table">
                 <thead>
                   <tr>
@@ -669,7 +676,7 @@
               <div class="card-head">
                 <h3><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i> Hospital-Wide Medicine Purchase Log</h3>
               </div>
-              <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+              <div class="table-responsive" style="max-height: 280px; overflow-y: auto;" tabindex="0" role="region" aria-label="Scrollable table">
                 <table class="modern-table">
                   <thead>
                     <tr>
@@ -702,7 +709,7 @@
                 <i class="fa-solid fa-truck-medical" aria-hidden="true"></i> Add Ambulance
               </button>
             </div>
-            <div class="table-responsive">
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table id="emt-table" class="modern-table">
                 <thead>
                   <tr>
@@ -720,11 +727,127 @@
           </div>
         </section>
 
+        <!-- 11. ACCOUNT & PRIVACY (everyone) -->
+        <section id="view-account" class="view-panel">
+          <div class="account-grid">
+            <div class="card glass-panel">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-envelope" aria-hidden="true"></i> Email address</h2>
+                <span id="account-email-status" class="status-pill"></span>
+              </div>
+              <form onsubmit="handleChangeEmail(event)">
+                <div class="form-group">
+                  <label for="account-email">Email</label>
+                  <input type="email" id="account-email" required autocomplete="email" maxlength="254" />
+                </div>
+                <div class="privacy-actions">
+                  <button type="submit" class="btn btn-primary">Save email</button>
+                  <button type="button" class="btn btn-outline" id="account-resend-btn" onclick="resendVerification()">Resend confirmation link</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="card glass-panel">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-key" aria-hidden="true"></i> Change password</h2>
+              </div>
+              <form onsubmit="handleChangePassword(event)">
+                <div class="form-group">
+                  <label for="account-current-password">Current password</label>
+                  <input type="password" id="account-current-password" required autocomplete="current-password" />
+                </div>
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label for="account-new-password">New password</label>
+                    <input type="password" id="account-new-password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="account-new-password-hint" />
+                    <small class="field-hint" id="account-new-password-hint">At least 8 characters</small>
+                  </div>
+                  <div class="form-group">
+                    <label for="account-confirm-password">Repeat new password</label>
+                    <input type="password" id="account-confirm-password" required minlength="8" maxlength="128" autocomplete="new-password" />
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Change password</button>
+              </form>
+            </div>
+
+            <div class="card glass-panel privacy-card">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-user-lock" aria-hidden="true"></i> Privacy &amp; my data</h2>
+              </div>
+              <p>Download a copy of everything we store about you, change your communication preferences, or delete your account. See our <a class="link-inline" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</p>
+              <div class="consent-group" style="margin-top: 12px;">
+                <label class="consent-item">
+                  <input type="checkbox" id="pref-marketing" onchange="handleMarketingPreference(this.checked)" />
+                  <span>Receive optional health tips and hospital updates</span>
+                </label>
+              </div>
+              <div class="privacy-actions">
+                <a class="btn btn-outline" href="/api/privacy/export" download><i class="fa-solid fa-download" aria-hidden="true"></i> Download my data (JSON)</a>
+                <button type="button" class="btn btn-outline" onclick="startOnboarding()"><i class="fa-solid fa-route" aria-hidden="true"></i> Replay welcome tour</button>
+              </div>
+            </div>
+
+            <div class="card glass-panel danger-zone">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Delete account</h2>
+              </div>
+              <p class="text-muted">Permanently deletes your login and personal details straight away. This can't be undone.</p>
+              <button type="button" class="btn btn-danger" onclick="openModal('modal-delete-account')"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Delete my account</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 12. SYSTEM: analytics, error log, backups (Staff Only) -->
+        <section id="view-system" class="view-panel">
+          <div class="account-grid">
+            <div class="card glass-panel">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-chart-line" aria-hidden="true"></i> Analytics (last 30 days)</h2>
+              </div>
+              <p class="text-muted" style="font-size: 13px;">Counted on our own server without cookies: page views per page and day only, nothing about who visited.</p>
+              <div class="analytics-totals" id="analytics-totals"></div>
+              <div id="analytics-pages" aria-live="polite"></div>
+            </div>
+
+            <div class="card glass-panel">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-database" aria-hidden="true"></i> Database backup</h2>
+              </div>
+              <p class="text-muted" style="font-size: 13px;">Downloads a complete copy of the database, including patient health records and password hashes. Store it encrypted and delete old copies.</p>
+              <a class="btn btn-primary" href="/api/admin/backup" download><i class="fa-solid fa-download" aria-hidden="true"></i> Download backup</a>
+            </div>
+
+            <div class="card glass-panel span-2">
+              <div class="card-head">
+                <h2 class="card-title"><i class="fa-solid fa-bug" aria-hidden="true"></i> Error log</h2>
+                <div class="privacy-actions" style="margin-top: 0;">
+                  <button type="button" class="btn btn-sm btn-outline" onclick="loadSystemPage()">Refresh</button>
+                  <button type="button" class="btn btn-sm btn-outline" onclick="clearErrorLog()">Clear</button>
+                </div>
+              </div>
+              <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
+                <table class="modern-table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Where</th>
+                      <th>Page</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="error-log-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- 10. PRIVACY / DATA DELETION REQUESTS (Staff Only) -->
         <section id="view-privacy" class="view-panel">
           <div class="table-card glass-panel">
-            <p class="text-muted" style="margin-bottom: 12px;">Deletion requests must be resolved within 30 days. Completing a request erases the login and non-clinical personal data; consultation and prescription records are retained, unlinked from the account, for the legal medical-record retention period.</p>
-            <div class="table-responsive">
+            <p class="text-muted" style="margin-bottom: 12px;">People can delete their own account from Account &amp; Privacy; those deletions appear here as completed. Older requests must be resolved within 30 days. Erasing removes the login and non-clinical personal data; consultation and prescription records are retained, unlinked from the account, for the legal medical-record retention period.</p>
+            <div class="table-responsive" tabindex="0" role="region" aria-label="Scrollable table">
               <table class="modern-table">
                 <thead>
                   <tr>
@@ -756,6 +879,7 @@
         <p>In a medical emergency, call your local emergency number. This portal is not an emergency service.</p>
       </footer>
     </main>
+    <div class="sidebar-scrim" id="sidebar-scrim" onclick="toggleMobileMenu(false)" aria-hidden="true"></div>
   </div>
 
   <!-- ================= MODALS ================= -->
@@ -1075,27 +1199,88 @@
     </div>
   </div>
 
-  <!-- Modal: Request account deletion -->
+  <!-- Modal: Delete account -->
   <div id="modal-delete-account" class="modal-backdrop hidden">
     <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-delete-account-title">
       <div class="modal-head">
-        <h3 id="modal-delete-account-title"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Request Account Deletion</h3>
+        <h3 id="modal-delete-account-title"><i class="fa-solid fa-user-xmark" aria-hidden="true"></i> Delete your account</h3>
         <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-delete-account')">&times;</button>
       </div>
-      <form onsubmit="handleDeletionRequest(event)">
+      <form onsubmit="handleDeleteAccount(event)">
         <p class="text-muted" style="margin-bottom: 12px; font-size: 13px; line-height: 1.6;">
-          We will delete your login and personal data within 30 days. Consultation and prescription records must be kept for the period required by medical-record law; they are unlinked from your account and deleted when that period ends. You can download your data first.
+          This deletes your login and personal details immediately and signs you out. Consultation and prescription records must be kept for the period required by medical-record law; they are unlinked from you and deleted when that period ends. <a class="link-inline" href="/api/privacy/export" download>Download your data</a> first if you want a copy.
         </p>
         <div class="form-group">
-          <label for="delete-reason">Reason (optional)</label>
+          <label for="delete-reason">Why are you leaving? (optional)</label>
           <textarea id="delete-reason" rows="2" maxlength="500"></textarea>
         </div>
         <div class="form-group">
-          <label for="delete-password">Confirm your password</label>
+          <label for="delete-password">Your password</label>
           <input type="password" id="delete-password" required autocomplete="current-password" />
         </div>
-        <button type="submit" class="btn btn-danger-sm btn-block" style="padding: 10px;">Submit deletion request</button>
+        <div class="form-group">
+          <label for="delete-confirm">Type DELETE to confirm</label>
+          <input type="text" id="delete-confirm" required pattern="[Dd][Ee][Ll][Ee][Tt][Ee]" title="Type the word DELETE" autocomplete="off" autocapitalize="characters" />
+        </div>
+        <button type="submit" class="btn btn-danger btn-block">Permanently delete my account</button>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal: Forgot password -->
+  <div id="modal-forgot-password" class="modal-backdrop hidden">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-forgot-password-title">
+      <div class="modal-head">
+        <h3 id="modal-forgot-password-title"><i class="fa-solid fa-key" aria-hidden="true"></i> Reset your password</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-forgot-password')">&times;</button>
+      </div>
+      <form onsubmit="handleForgotPassword(event)">
+        <p class="text-muted" style="margin-bottom: 12px; font-size: 13px;">Enter your username or email. If your account has an email address, we'll send it a link to choose a new password.</p>
+        <div class="form-group">
+          <label for="forgot-identifier">Username or email</label>
+          <input type="text" id="forgot-identifier" required autocomplete="username" autocapitalize="none" spellcheck="false" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Send reset link</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Choose a new password (opened from the emailed link) -->
+  <div id="modal-reset-password" class="modal-backdrop hidden">
+    <div class="modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="modal-reset-password-title">
+      <div class="modal-head">
+        <h3 id="modal-reset-password-title"><i class="fa-solid fa-lock" aria-hidden="true"></i> Choose a new password</h3>
+        <button type="button" class="btn-close" aria-label="Close dialog" onclick="closeModal('modal-reset-password')">&times;</button>
+      </div>
+      <form onsubmit="handleResetPassword(event)">
+        <div class="form-group">
+          <label for="reset-new-password">New password</label>
+          <input type="password" id="reset-new-password" required minlength="8" maxlength="128" autocomplete="new-password" aria-describedby="reset-new-password-hint" />
+          <small class="field-hint" id="reset-new-password-hint">At least 8 characters</small>
+        </div>
+        <div class="form-group">
+          <label for="reset-confirm-password">Repeat new password</label>
+          <input type="password" id="reset-confirm-password" required minlength="8" maxlength="128" autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Save new password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Welcome tour (onboarding) -->
+  <div id="modal-onboarding" class="modal-backdrop hidden">
+    <div class="modal-card glass-panel onboarding-card" role="dialog" aria-modal="true" aria-labelledby="modal-onboarding-title">
+      <div class="modal-head">
+        <h3 id="modal-onboarding-title"><i class="fa-solid fa-staff-snake" aria-hidden="true"></i> Welcome to Asclepio</h3>
+        <button type="button" class="btn-close" aria-label="Skip the tour" onclick="finishOnboarding()">&times;</button>
+      </div>
+      <div id="onboarding-step" aria-live="polite"></div>
+      <div class="onboarding-dots" id="onboarding-dots" aria-hidden="true"></div>
+      <div class="onboarding-actions">
+        <button type="button" class="btn btn-outline" id="onboarding-back" onclick="onboardingStep(-1)">Back</button>
+        <button type="button" class="btn btn-outline" id="onboarding-action" onclick="onboardingAction()"></button>
+        <button type="button" class="btn btn-primary" id="onboarding-next" onclick="onboardingStep(1)">Next</button>
+      </div>
     </div>
   </div>
 
