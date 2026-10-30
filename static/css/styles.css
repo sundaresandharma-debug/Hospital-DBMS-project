@@ -10,14 +10,15 @@
 :root {
   /* Surfaces */
   --page: #ffffff;
-  --tile: #f8ecf6;          /* pale orchid tint: cards and panels */
-  --tile-hover: #f1dcee;
-  --line: #ecdcea;          /* dividers */
-  --line-strong: #cfb8cc;   /* input borders */
+  --tile: #ffffff;          /* cards: white with a hairline border */
+  --tile-hover: #f7f4f7;
+  --wash: #f4f3f5;          /* small inner areas: tabs, fee box, menu hover */
+  --line: #e6e1e7;          /* dividers and card borders */
+  --line-strong: #cdc7cf;   /* input borders */
 
   /* Text */
   --text: #2a0530;          /* near-eggplant body text */
-  --muted: #5e4a61;         /* 8.0:1 on white, 7.0:1 on --tile */
+  --muted: #5e4a61;         /* 8.0:1 on white, 7.3:1 on --wash */
 
   /* Actions */
   --ink: #400849;           /* Deep Eggplant Violet: buttons, active navigation, headings */
@@ -142,7 +143,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 
 .auth-tabs {
   display: flex;
-  background: var(--tile);
+  background: var(--wash);
   padding: 4px;
   border-radius: var(--radius-full);
   margin-bottom: 20px;
@@ -390,7 +391,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
   margin-top: 18px;
   padding: 14px;
   border-radius: var(--radius-lg);
-  background: var(--tile);
+  background: var(--wash);
   text-align: center;
 }
 
@@ -506,7 +507,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
 
 .nav-item:hover {
-  background: var(--tile);
+  background: var(--wash);
 }
 
 .nav-item.active {
@@ -854,7 +855,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 
 .legend-box.available { background: var(--page); border: 1px solid var(--line-strong); border-left: 4px solid var(--ok); }
 .legend-box.occupied { background: var(--bad-bg); border-left: 4px solid var(--bad); }
-.legend-box.maintenance { background: var(--tile); border: 1px dashed var(--line-strong); }
+.legend-box.maintenance { background: var(--wash); border: 1px dashed var(--line-strong); }
 
 .ward-sections-container {
   display: flex;
@@ -955,7 +956,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 .bed-seat-card.state-occupied:hover { border-color: var(--bad); }
 
 .bed-seat-card.state-maintenance {
-  background: var(--tile);
+  background: var(--wash);
   border: 1px dashed var(--line-strong);
   color: var(--muted);
   cursor: not-allowed;
@@ -1070,7 +1071,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
 
 .rx-meds-list {
-  background: var(--tile);
+  background: var(--wash);
   padding: 10px 12px;
   border-radius: var(--radius-md);
   font-size: 12px;
@@ -1116,7 +1117,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  background: var(--tile);
+  background: var(--wash);
   padding: 12px 16px;
   border-radius: var(--radius-md);
   margin-bottom: 18px;
@@ -1211,7 +1212,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
 
 .btn-close {
-  background: var(--tile);
+  background: var(--wash);
   border: none;
   color: var(--text);
   width: 36px;
@@ -1421,7 +1422,7 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 }
 
 .fee-summary {
-  background: var(--tile);
+  background: var(--wash);
   padding: 14px 16px;
   border-radius: var(--radius-md);
   margin-bottom: 16px;
@@ -1882,7 +1883,7 @@ details summary { cursor: pointer; }
 /* Mobile menu: the sidebar becomes a slide-in drawer */
 .btn-menu {
   display: none;
-  background: var(--tile);
+  background: var(--wash);
   border: none;
   color: var(--text);
   width: 42px;
@@ -1965,7 +1966,7 @@ details summary { cursor: pointer; }
 }
 
 /* Small helpers used by the page markup and app.js */
-.input-readonly { background: var(--tile) !important; border-color: var(--tile) !important; }
+.input-readonly { background: var(--wash) !important; border-color: var(--wash) !important; }
 .input-strong { font-weight: 700; }
 .price-total { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; color: var(--text); }
 .tt-hint { color: #ffffff !important; font-size: 11px; margin-top: 4px; font-weight: 700; }
@@ -2026,3 +2027,57 @@ details summary { cursor: pointer; }
 
 .link-inline, .consent-item a, .forgot-link { text-underline-offset: 2px; }
 .onboarding-dots span.active { background: var(--signal); }
+
+/* ==========================================================================
+   White cards on white, with an eggplant band for each page title
+   ========================================================================== */
+
+.glass-panel,
+.stat-card,
+.ward-block,
+.auth-stat-card,
+.card-gradient-emerald, .card-gradient-cyan, .card-gradient-purple, .card-gradient-amber, .card-gradient-rose {
+  background: var(--tile);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(64, 8, 73, 0.06);
+}
+
+/* Page title sits in a solid eggplant band */
+.top-nav.glass-panel {
+  background: var(--ink);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  padding: 26px 28px;
+}
+.top-nav .page-title-wrap h1 { color: #ffffff; }
+.top-nav .page-title-wrap p { color: var(--orchid); }
+.top-nav .btn-outline {
+  background: transparent;
+  border-color: var(--orchid);
+  color: #ffffff;
+}
+.top-nav .btn-outline:hover { background: rgba(255, 255, 255, 0.1); }
+.top-nav .btn-menu { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+.top-nav :focus-visible { outline-color: var(--signal); }
+
+/* Sidebar and modals stay plain white */
+.sidebar.glass-panel,
+.modal-card.glass-panel { border: none; box-shadow: none; }
+.sidebar.glass-panel { border-right: 1px solid var(--line); }
+.modal-card.glass-panel { box-shadow: 0 24px 60px rgba(42, 5, 48, 0.25); }
+
+/* Sign-in, 404 and 500 pages: an eggplant band across the top */
+.auth-wrapper {
+  background: linear-gradient(var(--ink) 0, var(--ink) 38%, var(--page) 38%, var(--page) 100%);
+}
+.auth-card.glass-panel { box-shadow: 0 12px 40px rgba(42, 5, 48, 0.12); }
+.auth-wrapper > .site-footer,
+.auth-footer { color: var(--muted); }
+
+@media (max-width: 990px) {
+  .top-nav.glass-panel { padding: 18px 18px; }
+}
+@media (max-width: 860px) {
+  .auth-wrapper { background: linear-gradient(var(--ink) 0, var(--ink) 260px, var(--page) 260px); }
+}

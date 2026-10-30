@@ -53,9 +53,12 @@ body {
 }
 
 .legal-header {
-  border-bottom: 1px solid var(--border);
-  padding: 14px 16px;
+  background: #400849;
+  padding: 16px;
 }
+
+.legal-header a { color: #ffffff; }
+.legal-header a:focus-visible { outline-color: #ff5a0a; }
 
 
 .legal-header nav {
