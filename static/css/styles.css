@@ -1,32 +1,38 @@
 /* ===================================================
    ASCLEPIO HOSPITAL MANAGEMENT SYSTEM - STYLESHEET
-   Clean black-and-white look: white pages, light-grey rounded tiles,
-   black pill buttons, one blue for links and focus. Colour is used
-   only to show status (available / occupied / scheduled ...).
+   Palette: Deep Eggplant Violet #400849 (text, buttons, navigation),
+   Pastel Orchid Pink #E7B0DE (icons, badges; a pale tint for cards) and
+   Signal Orange #FF5A0A (the one main action per screen, focus ring).
+   Orange always carries eggplant text: white on orange is below 4.5:1.
+   Green and red are kept for status (available / occupied ...).
    =================================================== */
 
 :root {
   /* Surfaces */
   --page: #ffffff;
-  --tile: #f4f4f4;          /* cards and panels */
-  --tile-hover: #ececec;
-  --line: #e3e3e3;          /* dividers */
-  --line-strong: #c4c4c4;   /* input borders */
+  --tile: #f8ecf6;          /* pale orchid tint: cards and panels */
+  --tile-hover: #f1dcee;
+  --line: #ecdcea;          /* dividers */
+  --line-strong: #cfb8cc;   /* input borders */
 
   /* Text */
-  --text: #000000;
-  --muted: #555555;         /* 7.4:1 on white, 6.8:1 on --tile */
+  --text: #2a0530;          /* near-eggplant body text */
+  --muted: #5e4a61;         /* 8.0:1 on white, 7.0:1 on --tile */
 
   /* Actions */
-  --ink: #000000;           /* primary buttons, active navigation */
-  --ink-hover: #2b2b2b;
-  --link: #1428a0;          /* links and keyboard focus */
+  --ink: #400849;           /* Deep Eggplant Violet: buttons, active navigation, headings */
+  --ink-hover: #5a1466;
+  --orchid: #e7b0de;        /* Pastel Orchid Pink: icon circles, badges */
+  --signal: #ff5a0a;        /* Signal Orange: main call to action, focus ring */
+  --signal-hover: #ff7333;
+  --link: #400849;          /* links (underlined) */
+  --focus: #ff5a0a;         /* 3.1:1 on white, enough for a focus outline */
 
   /* Status colours (text on tinted background, all WCAG AA) */
   --ok: #0a7a3b;      --ok-bg: #e6f4ec;
   --bad: #c4161c;     --bad-bg: #fce9ea;
   --warn: #8a5300;    --warn-bg: #fdf3e1;
-  --info: #1428a0;    --info-bg: #e8ebf7;
+  --info: #400849;    --info-bg: #e7b0de;
 
   /* Kept for older rules and inline styles */
   --border-color: var(--line);
@@ -1338,13 +1344,13 @@ h1, h2, h3, h4 { letter-spacing: -0.02em; }
 
 /* Visible keyboard focus everywhere */
 :focus-visible {
-  outline: 3px solid var(--link);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
 /* Role cards hide the native radio; show focus on the card instead */
 .role-card input:focus-visible + .role-card-inner {
-  outline: 3px solid var(--link);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -1976,3 +1982,47 @@ details summary { cursor: pointer; }
   font-family: inherit;
   font-size: 13px;
 }
+
+/* ==========================================================================
+   Palette accents (eggplant / orchid / orange)
+   ========================================================================== */
+
+/* Headings and big figures in eggplant */
+.auth-header h1, .page-title-wrap h1, .sidebar-brand h3, .card-head h3, .card-title,
+.modal-head h3, .ward-block-header h3, .stat-content h3, .auth-stat-value,
+.analytics-number, .status-code, .onboarding-title, .price-total, .cookie-banner h2 {
+  color: var(--ink);
+}
+
+/* Icon circles and small badges in orchid */
+.logo-circle, .stat-icon, .auth-stat-icon, .user-avatar, .onboarding-icon {
+  background: var(--orchid);
+  color: var(--ink);
+}
+.badge-role, .ward-badge { background: var(--orchid); color: var(--ink); }
+.badge-role.role-patient { background: var(--ok-bg); color: var(--ok); }
+
+/* The one main action per screen: orange with eggplant text (5.0:1) */
+.btn-cta,
+.btn-primary.btn-cta,
+.btn-gradient.btn-cta {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--ink);
+}
+.btn-cta:hover,
+.btn-primary.btn-cta:hover,
+.btn-gradient.btn-cta:hover {
+  background: var(--signal-hover);
+  border-color: var(--signal-hover);
+}
+.btn-cta.is-loading::after {
+  border-color: rgba(64, 8, 73, 0.25);
+  border-top-color: var(--ink);
+}
+
+/* Current page in the menu: eggplant pill with an orange edge */
+.nav-item.active { box-shadow: inset 4px 0 0 var(--signal); }
+
+.link-inline, .consent-item a, .forgot-link { text-underline-offset: 2px; }
+.onboarding-dots span.active { background: var(--signal); }
