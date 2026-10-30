@@ -1,23 +1,23 @@
 /* Shared styles for the legal pages (light theme, WCAG AA contrast). */
 :root {
-  --text: #000000;
-  --muted: #555555;
-  --link: #1428a0;
+  --text: #2a0530;
+  --muted: #5e4a61;
+  --link: #400849;
   --bg: #ffffff;
-  --panel: #f4f4f4;
-  --border: #e3e3e3;
+  --panel: #f8ecf6;
+  --border: #ecdcea;
   --notice-bg: #fdf3e1;
   --notice-text: #6b4100;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --text: #f2f2f2;
-    --muted: #bdbdbd;
-    --link: #9fb0ff;
-    --bg: #0d0d0d;
-    --panel: #1c1c1c;
-    --border: #333333;
+    --text: #f6eaf4;
+    --muted: #d3bfd0;
+    --link: #e7b0de;
+    --bg: #1b0320;
+    --panel: #2a0a31;
+    --border: #4a2350;
     --notice-bg: #3a2a10;
     --notice-text: #fde8bf;
   }
@@ -48,7 +48,7 @@ body {
 .skip-link:focus { top: 12px; }
 
 :focus-visible {
-  outline: 3px solid var(--link);
+  outline: 3px solid #ff5a0a;
   outline-offset: 2px;
 }
 
@@ -75,7 +75,7 @@ a { color: var(--link); }
   padding: 24px 16px 48px;
 }
 
-h1 { font-size: 36px; line-height: 1.2; letter-spacing: -0.03em; font-weight: 800; margin: 8px 0 4px; }
+h1 { color: var(--link); font-size: 36px; line-height: 1.2; letter-spacing: -0.03em; font-weight: 800; margin: 8px 0 4px; }
 h2 { font-size: 22px; letter-spacing: -0.02em; margin-top: 32px; }
 h3 { font-size: 17px; margin-top: 20px; }
 
