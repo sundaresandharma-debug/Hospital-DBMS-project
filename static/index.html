@@ -411,7 +411,7 @@
         <section id="view-beds" class="view-panel">
           <div class="table-card glass-panel">
             <div class="ward-legend">
-              <span style="font-weight: 700; color: #38bdf8;"><i class="fa-solid fa-map" aria-hidden="true"></i> Bed Status Legend:</span>
+              <span class="ward-legend-title"><i class="fa-solid fa-map" aria-hidden="true"></i> Bed Status Legend:</span>
               <div class="legend-item"><div class="legend-box available" aria-hidden="true"></div> Available (select to reserve / allocate)</div>
               <div class="legend-item"><div class="legend-box occupied" aria-hidden="true"></div> Occupied</div>
               <div class="legend-item"><div class="legend-box maintenance" aria-hidden="true"></div> Maintenance</div>
@@ -555,7 +555,7 @@
                 </div>
 
                 <div class="profile-meta-info" style="margin-bottom: 16px;">
-                  <span id="prof-bed-info" class="badge-role" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 12px; padding: 6px 12px;">
+                  <span id="prof-bed-info" class="badge-role role-patient" style="font-size: 12px; padding: 6px 12px;">
                     <i class="fa-solid fa-bed" aria-hidden="true"></i> Bed: Not currently admitted
                   </span>
                   <span id="prof-bill-info" class="badge-role" style="font-size: 12px; padding: 6px 12px; margin-left: 8px;">
@@ -573,7 +573,7 @@
             <div class="card glass-panel">
               <div class="card-head">
                 <h3><i class="fa-solid fa-receipt" aria-hidden="true"></i> Medicine Purchase History</h3>
-                <span class="badge-role" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8;">Receipt Log</span>
+                <span class="badge-role">Receipt Log</span>
               </div>
               <div class="table-responsive" style="max-height: 480px; overflow-y: auto;" tabindex="0" role="region" aria-label="Scrollable table">
                 <table class="modern-table">
@@ -894,12 +894,12 @@
       <form onsubmit="handleBuyMedicine(event)">
         <div class="form-group">
           <label for="buy-med-name">Selected Medicine</label>
-          <input type="text" id="buy-med-name" readonly style="background: rgba(0,0,0,0.4); font-weight: 700; color: #38bdf8;" />
+          <input type="text" id="buy-med-name" class="input-readonly input-strong" readonly />
         </div>
         <div class="form-grid-2">
           <div class="form-group">
             <label for="buy-med-price">Price per Unit (INR)</label>
-            <input type="text" id="buy-med-price" readonly style="background: rgba(0,0,0,0.4);" />
+            <input type="text" id="buy-med-price" class="input-readonly" readonly />
           </div>
           <div class="form-group">
             <label for="buy-med-qty">Units / Quantity Required</label>
@@ -908,7 +908,7 @@
         </div>
         <div class="fee-summary" aria-live="polite">
           <span>Total payable:</span>
-          <p id="buy-med-total" style="color: #34d399; font-size: 22px; font-weight: 800; margin-top: 4px;">₹0.00</p>
+          <p id="buy-med-total" class="price-total">₹0.00</p>
           <small>This is the full price. No taxes, delivery or service charges are added at checkout. See our <a class="link-inline" href="/refunds" target="_blank" rel="noopener">Refund Policy</a>.</small>
         </div>
         <button type="submit" class="btn btn-gradient btn-block">

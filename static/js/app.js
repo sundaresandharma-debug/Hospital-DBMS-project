@@ -606,13 +606,13 @@ function renderBedsMatrix(beds) {
                     <span class="tt-line"><strong>Age/Gender:</strong> ${bed.PATIENT_AGE || '--'} yrs / ${escapeHtml(bed.PATIENT_GENDER || '--')}</span>
                     <span class="tt-line"><strong>Condition:</strong> ${escapeHtml(bed.PATIENT_ISSUE || 'Under observation')}</span>
                     <span class="tt-line"><strong>Admitted:</strong> ${escapeHtml(bed.ASSIGNED_DATE || 'Recent')}</span>
-                    ${actionHint ? `<span class="tt-line" style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">${actionHint}</span>` : ''}
+                    ${actionHint ? `<span class="tt-line tt-hint">${actionHint}</span>` : ''}
                   </span>
                 ` : `
                   <span class="bed-tooltip" aria-hidden="true">
                     <span class="tt-title">${escapeHtml(bed.BED_NUMBER)}</span>
                     <span class="tt-line">${escapeHtml(bed.STATUS)}</span>
-                    ${actionHint ? `<span class="tt-line" style="color: #38bdf8; font-size: 11px; margin-top: 4px; font-weight: bold;">${actionHint}</span>` : ''}
+                    ${actionHint ? `<span class="tt-line tt-hint">${actionHint}</span>` : ''}
                   </span>
                 `}
               </button>
@@ -724,7 +724,7 @@ async function loadPharmacyInventory() {
           <td><span class="badge-role">${escapeHtml(med.MEDICINE_TYPE)}</span></td>
           <td>
             ${isStaff ? `
-              <span style="color: ${med.STOCK < 50 ? '#f87171' : '#34d399'}; font-weight: 700;">
+              <span class="${med.STOCK < 50 ? 'stock-level-low' : 'stock-level-ok'}">
                 ${med.STOCK} units ${med.STOCK < 50 ? '(Low)' : ''}
               </span>
             ` : `
@@ -865,7 +865,7 @@ async function loadDoctorsRegistry() {
         <td><span class="badge-role">${escapeHtml(doc.DEPARTMENT)}</span></td>
         <td>${doc.AGE} yrs / ${escapeHtml(doc.GENDER)}</td>
         <td>₹${Number(doc.SALARY).toLocaleString()}</td>
-        <td><a href="tel:${doc.MOBILE_NO}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone"></i> ${escapeHtml(doc.MOBILE_NO || 'N/A')}</a></td>
+        <td><a href="tel:${doc.MOBILE_NO}" class="tel-link"><i class="fa-solid fa-phone"></i> ${escapeHtml(doc.MOBILE_NO || 'N/A')}</a></td>
         <td>
           <button class="btn-danger-sm" onclick="deleteDoctorRecord('${doc.EID}')" title="Delete doctor record" aria-label="Delete ${escapeHtml(doc.NAME)}">
             <i class="fa-solid fa-trash" aria-hidden="true"></i>
@@ -940,7 +940,7 @@ async function loadPatientsRegistry() {
         <td>${escapeHtml(pat.BLOOD_GROUP || '--')} / ${escapeHtml(pat.ALLERGIES || '--')}</td>
         <td>${pat.AGE || '--'} / ${escapeHtml(pat.GENDER || '--')}${pat.GUARDIAN_NAME ? `<br /><small class="text-muted">Guardian: ${escapeHtml(pat.GUARDIAN_NAME)}</small>` : ''}</td>
         <td>${pat.BED_NUMBER ? `${escapeHtml(pat.BED_NUMBER)} <small class="text-muted">(${escapeHtml(pat.WARD_TYPE)})</small>` : '--'}</td>
-        <td><a href="tel:${escapeHtml(pat.MOBILE_NO)}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(pat.MOBILE_NO || 'N/A')}</a></td>
+        <td><a href="tel:${escapeHtml(pat.MOBILE_NO)}" class="tel-link"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(pat.MOBILE_NO || 'N/A')}</a></td>
         <td><span class="badge-role">${escapeHtml(pat.BILL_NO || 'N/A')}</span></td>
         ${isStaff ? `
           <td>
@@ -1014,7 +1014,7 @@ async function loadConsultationsRegistry() {
       <tr>
         <td><code>${escapeHtml(item.CONSULTATION_ID)}</code></td>
         <td><strong>${escapeHtml(item.PATIENT_NAME)}</strong></td>
-        <td>${escapeHtml(item.DOCTOR_NAME)} <small style="color: #94a3b8;">(${escapeHtml(item.DEPARTMENT)})</small></td>
+        <td>${escapeHtml(item.DOCTOR_NAME)} <small class="text-muted">(${escapeHtml(item.DEPARTMENT)})</small></td>
         <td>${escapeHtml(item.REASON)}</td>
         <td>₹${Number(item.FEES || 0).toLocaleString()}</td>
         <td>${escapeHtml(item.TIME)}</td>
@@ -1190,7 +1190,7 @@ async function openPrescriptionSlip(prescriptionId) {
             <div class="slip-hospital-title">Asclepio</div>
           </div>
           <div style="text-align: right;">
-            <span style="font-size: 18px; font-weight: 800; color: #0284c7;">℞ PRESCRIPTION</span>
+            <span style="font-size: 18px; font-weight: 800; color: #000000;">℞ PRESCRIPTION</span>
             <p style="font-size: 12px; font-weight: 700;">ID: ${escapeHtml(rx.PRESCRIPTION_ID)}</p>
             <p style="font-size: 12px;">Date: ${escapeHtml(rx.DATE)}</p>
           </div>
@@ -1269,11 +1269,11 @@ async function loadAmbulanceFleet() {
         <td><code>${escapeHtml(amb.VNO)}</code></td>
         <td><strong>${escapeHtml(amb.VTYPE)}</strong></td>
         <td>${escapeHtml(amb.DRIVER_NAME)}</td>
-        <td><a href="tel:${escapeHtml(amb.MOBILE_NO)}" style="color: #38bdf8; text-decoration: none;"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(amb.MOBILE_NO)}</a></td>
+        <td><a href="tel:${escapeHtml(amb.MOBILE_NO)}" class="tel-link"><i class="fa-solid fa-phone" aria-hidden="true"></i> ${escapeHtml(amb.MOBILE_NO)}</a></td>
         <td><span class="status-pill status-${amb.STATUS.toLowerCase()}">${amb.STATUS}</span></td>
         ${isStaff ? `
           <td>
-            <select aria-label="Change status of ${escapeHtml(amb.VNO)}" onchange="updateAmbulanceStatus('${amb.VNO}', this.value)" style="padding: 4px 8px; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid var(--border-color);">
+            <select aria-label="Change status of ${escapeHtml(amb.VNO)}" onchange="updateAmbulanceStatus('${amb.VNO}', this.value)" class="inline-select">
               <option value="Available" ${amb.STATUS === 'Available' ? 'selected' : ''}>Available</option>
               <option value="Dispatched" ${amb.STATUS === 'Dispatched' ? 'selected' : ''}>Dispatched</option>
               <option value="Maintenance" ${amb.STATUS === 'Maintenance' ? 'selected' : ''}>Maintenance</option>
