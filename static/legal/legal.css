@@ -1,25 +1,25 @@
 /* Shared styles for the legal pages (light theme, WCAG AA contrast). */
 :root {
-  --text: #0f172a;
-  --muted: #475569;
-  --link: #0369a1;
+  --text: #000000;
+  --muted: #555555;
+  --link: #1428a0;
   --bg: #ffffff;
-  --panel: #f1f5f9;
-  --border: #cbd5e1;
-  --notice-bg: #fef3c7;
-  --notice-text: #78350f;
+  --panel: #f4f4f4;
+  --border: #e3e3e3;
+  --notice-bg: #fdf3e1;
+  --notice-text: #6b4100;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --text: #f1f5f9;
-    --muted: #cbd5e1;
-    --link: #7dd3fc;
-    --bg: #0b132b;
-    --panel: #15203f;
-    --border: #334155;
-    --notice-bg: #78350f;
-    --notice-text: #fef3c7;
+    --text: #f2f2f2;
+    --muted: #bdbdbd;
+    --link: #9fb0ff;
+    --bg: #0d0d0d;
+    --panel: #1c1c1c;
+    --border: #333333;
+    --notice-bg: #3a2a10;
+    --notice-text: #fde8bf;
   }
 }
 
@@ -29,7 +29,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
   font-size: 16px;
   line-height: 1.7;
 }
@@ -38,16 +39,16 @@ body {
   position: absolute;
   left: 16px;
   top: -60px;
-  background: var(--link);
+  background: var(--text);
   color: var(--bg);
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
 }
 
 .skip-link:focus { top: 12px; }
 
 :focus-visible {
-  outline: 3px solid #f59e0b;
+  outline: 3px solid var(--link);
   outline-offset: 2px;
 }
 
@@ -74,8 +75,8 @@ a { color: var(--link); }
   padding: 24px 16px 48px;
 }
 
-h1 { font-size: 30px; line-height: 1.25; margin: 8px 0 4px; }
-h2 { font-size: 21px; margin-top: 32px; }
+h1 { font-size: 36px; line-height: 1.2; letter-spacing: -0.03em; font-weight: 800; margin: 8px 0 4px; }
+h2 { font-size: 22px; letter-spacing: -0.02em; margin-top: 32px; }
 h3 { font-size: 17px; margin-top: 20px; }
 
 .updated { color: var(--muted); margin-top: 0; }
@@ -83,8 +84,8 @@ h3 { font-size: 17px; margin-top: 20px; }
 .review-notice {
   background: var(--notice-bg);
   color: var(--notice-text);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 16px;
+  padding: 14px 18px;
   font-size: 14px;
 }
 
@@ -108,10 +109,11 @@ th { background: var(--panel); }
 
 button {
   font: inherit;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  padding: 9px 20px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1.5px solid var(--text);
+  background: var(--bg);
   color: var(--text);
   cursor: pointer;
 }

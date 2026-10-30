@@ -18,8 +18,7 @@ social or error-tracking SDKs.
 
 | Asset | Version | Licence | Licence file |
 |---|---|---|---|
-| Plus Jakarta Sans (latin, weights 400–800) via @fontsource | 5.3.0 | SIL Open Font License 1.1 | `static/vendor/licenses/PLUS-JAKARTA-SANS-OFL.txt` |
-| Outfit (latin, weights 500–800) via @fontsource | 5.3.0 | SIL Open Font License 1.1 | `static/vendor/licenses/OUTFIT-OFL.txt` |
+| Inter (latin, weights 400–800) via @fontsource | 5.1.0 | SIL Open Font License 1.1 | `static/vendor/licenses/INTER-OFL.txt` |
 | Font Awesome Free (core CSS + solid icons) | 6.5.0 | Icons CC BY 4.0, fonts SIL OFL 1.1, code MIT | `static/vendor/licenses/FONT-AWESOME-FREE-LICENSE.txt` |
 
 The Font Awesome attribution comment at the top of each CSS file must be kept, as its licence requires.
